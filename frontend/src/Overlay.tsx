@@ -1,0 +1,138 @@
+import { useState, useEffect, useRef } from 'react';
+
+const ADVICE_DURATION_MS = 8000;
+const SAMPLE_RATE = 16000;
+
+export default function Overlay() {
+    const [advice, setAdvice] = useState<string | null>(null);
+    const [status, setStatus] = useState<string>('connecting');
+    const socketRef = useRef<WebSocket | null>(null);
+    const audioContextRef = useRef<AudioContext | null>(null);
+
+    // Auto-dismiss logic
+    useEffect(() => {
+        if (advice) {
+            const timer = setTimeout(() => {
+                setAdvice(null);
+            }, ADVICE_DURATION_MS);
+            return () => clearTimeout(timer);
+        }
+    }, [advice]);
+
+    // Main Wiring: Mic -> Socket
+    useEffect(() => {
+        let processor: ScriptProcessorNode | null = null;
+        let microphone: MediaStreamAudioSourceNode | null = null;
+        let stream: MediaStream | null = null;
+
+        const connect = async () => {
+            try {
+                const ws = new WebSocket('ws://127.0.0.1:8000/ws');
+                socketRef.current = ws;
+
+                await new Promise<void>((resolve, reject) => {
+                    ws.onopen = () => {
+                        console.log('WS Connected');
+                        resolve();
+                    };
+                    ws.onerror = () => reject(new Error('WebSocket error'));
+                });
+
+                setStatus('connected');
+
+                ws.onmessage = (event) => {
+                    console.log('Advice received:', event.data);
+                    setAdvice(event.data);
+                };
+
+                ws.onclose = () => setStatus('connecting');
+
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const audioContext = new window.AudioContext({ sampleRate: SAMPLE_RATE });
+                audioContextRef.current = audioContext;
+                microphone = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                processor.onaudioprocess = (e) => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        const pcmData = floatTo16BitPCM(inputData);
+                        ws.send(pcmData);
+                    }
+                };
+
+                microphone.connect(processor);
+                processor.connect(audioContext.destination);
+
+            } catch (err) {
+                console.error('Error connecting:', err);
+                setStatus('error');
+            }
+        };
+
+        connect();
+
+        return () => {
+            if (socketRef.current) socketRef.current.close();
+            if (audioContextRef.current) audioContextRef.current.close();
+            if (microphone) microphone.disconnect();
+            if (processor) processor.disconnect();
+        };
+    }, []);
+
+    const floatTo16BitPCM = (input: Float32Array) => {
+        const output = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+            const s = Math.max(-1, Math.min(1, input[i]));
+            output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return output.buffer;
+    };
+
+    return (
+        <div
+            style={{
+                // Use Electron's native drag region
+                // @ts-ignore - Electron-specific CSS property
+                WebkitAppRegion: 'drag',
+                position: 'fixed',
+                top: '50px',
+                right: '50px',
+                backgroundColor: 'rgba(0, 0, 0, 0.95)',
+                color: '#00ff41',
+                padding: '24px 32px',
+                borderRadius: '16px',
+                fontSize: '24px',
+                fontWeight: 'bold',
+                fontFamily: 'monospace',
+                boxShadow: '0 8px 32px rgba(0, 255, 65, 0.3)',
+                border: `3px solid ${status === 'error' ? '#ff0000' : status === 'connected' ? '#00ff41' : '#ff9900'}`,
+                textAlign: 'center',
+                minWidth: '450px',
+                maxWidth: '600px',
+                zIndex: 99999,
+                cursor: 'move'
+            }}>
+            {status === 'error' && (
+                <div style={{ color: '#ff0000', fontSize: '18px', marginBottom: '8px' }}>
+                    ⚠️ CONNECTION ERROR
+                </div>
+            )}
+            {status === 'connecting' && (
+                <div style={{ color: '#ff9900', fontSize: '18px' }}>
+                    ⏳ CONNECTING...
+                </div>
+            )}
+            {status === 'connected' && !advice && (
+                <div style={{ color: '#00ff41', fontSize: '18px' }}>
+                    🎤 LISTENING... (drag window to move)
+                </div>
+            )}
+            {advice && (
+                <div style={{ fontSize: '28px', marginTop: advice ? '0' : '8px' }}>
+                    {advice.toUpperCase()}
+                </div>
+            )}
+        </div>
+    );
+}
