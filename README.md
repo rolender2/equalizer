@@ -1,6 +1,6 @@
-# Sidekick (The Equalizer) - MVP
+# Sidekick Equalizer
 
-**Sidekick** is a real-time AI negotiation coach that sits as a transparent, draggable overlay on your screen. It listens to your negotiation (via microphone) and provides instant, tactical advice to help you win.
+**Sidekick Equalizer** is a real-time AI negotiation coach that sits as a transparent, draggable overlay on your screen. It listens to your negotiation (via microphone) and provides instant, tactical advice to help you level the playing field.
 
 ## 🏗️ Architecture
 

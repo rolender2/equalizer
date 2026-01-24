@@ -1,4 +1,4 @@
-# Business Case: Vantage (Real-Time AI Coach)
+# Business Case: Sidekick Equalizer (Real-Time AI Coach)
 
 ## The Verdict: YES, Highly Viable.
 **Bottom Line:** This is a high-margin "Prosumer SaaS" business if you target the right niche. You can break even with just **1,500 users**.

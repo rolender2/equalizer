@@ -1,4 +1,4 @@
-# Sidekick - Revenue Generation Analysis
+# Sidekick Equalizer - Revenue Generation Analysis
 
 ## 🎯 Current MVP Value Assessment
 

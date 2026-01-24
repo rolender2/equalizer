@@ -1,7 +1,7 @@
-# Sidekick - Market Assessment & Strategic Analysis
+# Sidekick Equalizer - Market Assessment & Strategic Analysis
 
 ## 1. Executive Summary
-**Sidekick** is a Real-Time AI Negotiation Coach. Unlike sales-focused tools (Gong, Chorus) that serve large teams, Sidekick targets the **"Prosumer" Buyer** (Procurement Managers, Freelancers, small Agency Owners) and the **Consumer "Life Hacker"**. It sits as a desktop overlay, listening to negotiations and providing instant tactical advice (e.g., "Silence detected - wait for their offer").
+**Sidekick Equalizer** is a Real-Time AI Negotiation Coach. Unlike sales-focused tools (Gong, Chorus) that serve large teams, Sidekick Equalizer targets the **"Prosumer" Buyer** (Procurement Managers, Freelancers, small Agency Owners) and the **Consumer "Life Hacker"**. It sits as a desktop overlay, listening to negotiations and providing instant tactical advice (e.g., "Silence detected - wait for their offer").
 
 ## 2. The Core Market: Professional Negotiators (The "Business")
 *   **Target Persona:** Procurement Officers, Project Managers, Freelancers, Real Estate Agents.

@@ -1,9 +1,8 @@
-
 Do not add additional directories unless explicitly required.
 
 ---
 
-## 6. Backend Responsibilities (FastAPI)
+## Sidekick Equalizer - Agent Personality Definitions (FastAPI)
 
 ### WebSocket Contract
 - One WebSocket connection = one live session

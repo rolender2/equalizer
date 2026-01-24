@@ -1,4 +1,4 @@
-# Sidekick Post-MVP Implementation Plan
+# Sidekick Equalizer Post-MVP Implementation Plan
 
 ## 🎯 Goal
 Evolve Sidekick from MVP to a production-ready negotiation assistant with enhanced audio capture, UX polish, and customization.
