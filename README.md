@@ -139,7 +139,13 @@ equalizer/
 ---
 
 ## 🔮 Future Enhancements
-- [ ] Capture system audio (hear both sides of call)
-- [ ] Keyboard shortcut to toggle listening
-- [ ] Persist overlay position across sessions
+
+See [docs/POST_MVP_ROADMAP.md](docs/POST_MVP_ROADMAP.md) for detailed implementation plans.
+
+**Completed:**
+- [x] Keyboard shortcut to toggle listening (Ctrl+Shift+S)
+- [x] Persist overlay position across sessions
+
+**Upcoming:**
 - [ ] Custom Coach personalities (aggressive vs. diplomatic)
+- [ ] Capture system audio (hear both sides of call)
