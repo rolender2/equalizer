@@ -1,35 +1,67 @@
-const { app, BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen, globalShortcut, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let mainWindow;
 
+// Path to store window position
+const configPath = path.join(app.getPath('userData'), 'window-position.json');
+
+function loadPosition() {
+    try {
+        if (fs.existsSync(configPath)) {
+            const data = fs.readFileSync(configPath, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (err) {
+        console.error('Error loading position:', err);
+    }
+    return null;
+}
+
+function savePosition(bounds) {
+    try {
+        fs.writeFileSync(configPath, JSON.stringify(bounds));
+    } catch (err) {
+        console.error('Error saving position:', err);
+    }
+}
+
 function createWindow() {
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+    const savedPosition = loadPosition();
 
     mainWindow = new BrowserWindow({
-        width: width,      // Full screen width
-        height: height,    // Full screen height
-        x: 0,
-        y: 0,
+        width: width,
+        height: height,
+        x: savedPosition?.x ?? 0,
+        y: savedPosition?.y ?? 0,
         frame: false,
         transparent: true,
         alwaysOnTop: true,
         hasShadow: false,
-        skipTaskbar: true,  // Don't show in taskbar
+        skipTaskbar: true,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
         },
     });
 
-    // Enable click-through for transparent areas
     mainWindow.setIgnoreMouseEvents(false);
-
-    // Load Vite Dev Server
     mainWindow.loadURL('http://localhost:5173');
 
-    // Open DevTools (optional for debugging)
-    // mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // Save position when window moves
+    mainWindow.on('moved', () => {
+        const bounds = mainWindow.getBounds();
+        savePosition({ x: bounds.x, y: bounds.y });
+        console.log(`Position saved: ${bounds.x}, ${bounds.y}`);
+    });
+
+    // Register global shortcut: Ctrl+Shift+S to toggle listening
+    globalShortcut.register('CommandOrControl+Shift+S', () => {
+        console.log('Toggle shortcut pressed');
+        mainWindow.webContents.send('toggle-listening');
+    });
 }
 
 app.whenReady().then(createWindow);
@@ -44,4 +76,8 @@ app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
     }
+});
+
+app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
 });

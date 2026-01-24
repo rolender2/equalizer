@@ -1,13 +1,42 @@
 import { useState, useEffect, useRef } from 'react';
 
+// Electron IPC for receiving toggle events
+const ipcRenderer = (window as any).require?.('electron')?.ipcRenderer;
+
 const ADVICE_DURATION_MS = 8000;
 const SAMPLE_RATE = 16000;
 
 export default function Overlay() {
     const [advice, setAdvice] = useState<string | null>(null);
     const [status, setStatus] = useState<string>('connecting');
+    const [isListening, setIsListening] = useState(true);
     const socketRef = useRef<WebSocket | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
+    const processorRef = useRef<ScriptProcessorNode | null>(null);
+
+    // Listen for toggle shortcut from Electron main process
+    useEffect(() => {
+        if (ipcRenderer) {
+            const handleToggle = () => {
+                setIsListening(prev => !prev);
+            };
+            ipcRenderer.on('toggle-listening', handleToggle);
+            return () => {
+                ipcRenderer.removeListener('toggle-listening', handleToggle);
+            };
+        }
+    }, []);
+
+    // Handle pause/resume audio processing
+    useEffect(() => {
+        if (processorRef.current && audioContextRef.current) {
+            if (isListening) {
+                audioContextRef.current.resume();
+            } else {
+                audioContextRef.current.suspend();
+            }
+        }
+    }, [isListening]);
 
     // Auto-dismiss logic
     useEffect(() => {
@@ -52,6 +81,7 @@ export default function Overlay() {
                 audioContextRef.current = audioContext;
                 microphone = audioContext.createMediaStreamSource(stream);
                 processor = audioContext.createScriptProcessor(4096, 1, 1);
+                processorRef.current = processor;
 
                 processor.onaudioprocess = (e) => {
                     if (ws.readyState === WebSocket.OPEN) {
@@ -89,10 +119,17 @@ export default function Overlay() {
         return output.buffer;
     };
 
+    // Determine display status
+    const getDisplayStatus = () => {
+        if (!isListening) return 'paused';
+        return status;
+    };
+
+    const displayStatus = getDisplayStatus();
+
     return (
         <div
             style={{
-                // Use Electron's native drag region
                 // @ts-ignore - Electron-specific CSS property
                 WebkitAppRegion: 'drag',
                 position: 'fixed',
@@ -105,31 +142,36 @@ export default function Overlay() {
                 fontSize: '24px',
                 fontWeight: 'bold',
                 fontFamily: 'monospace',
-                boxShadow: '0 8px 32px rgba(0, 255, 65, 0.3)',
-                border: `3px solid ${status === 'error' ? '#ff0000' : status === 'connected' ? '#00ff41' : '#ff9900'}`,
+                boxShadow: `0 8px 32px ${!isListening ? 'rgba(255, 153, 0, 0.3)' : 'rgba(0, 255, 65, 0.3)'}`,
+                border: `3px solid ${displayStatus === 'error' ? '#ff0000' : displayStatus === 'paused' ? '#ff9900' : displayStatus === 'connected' ? '#00ff41' : '#ff9900'}`,
                 textAlign: 'center',
                 minWidth: '450px',
                 maxWidth: '600px',
                 zIndex: 99999,
                 cursor: 'move'
             }}>
-            {status === 'error' && (
+            {displayStatus === 'error' && (
                 <div style={{ color: '#ff0000', fontSize: '18px', marginBottom: '8px' }}>
                     ⚠️ CONNECTION ERROR
                 </div>
             )}
-            {status === 'connecting' && (
+            {displayStatus === 'connecting' && (
                 <div style={{ color: '#ff9900', fontSize: '18px' }}>
                     ⏳ CONNECTING...
                 </div>
             )}
-            {status === 'connected' && !advice && (
-                <div style={{ color: '#00ff41', fontSize: '18px' }}>
-                    🎤 LISTENING... (drag window to move)
+            {displayStatus === 'paused' && (
+                <div style={{ color: '#ff9900', fontSize: '18px' }}>
+                    ⏸️ PAUSED (Ctrl+Shift+S to resume)
                 </div>
             )}
-            {advice && (
-                <div style={{ fontSize: '28px', marginTop: advice ? '0' : '8px' }}>
+            {displayStatus === 'connected' && !advice && (
+                <div style={{ color: '#00ff41', fontSize: '18px' }}>
+                    🎤 LISTENING... (Ctrl+Shift+S to pause)
+                </div>
+            )}
+            {advice && isListening && (
+                <div style={{ fontSize: '28px' }}>
                     {advice.toUpperCase()}
                 </div>
             )}
