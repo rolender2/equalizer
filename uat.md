@@ -1,7 +1,7 @@
-# User Acceptance Test (UAT) - MVP Tightening (Phase 1 & 2)
+# User Acceptance Test (UAT) - MVP Tightening (Phase 1-4)
 
-This script verifies the new **Negotiation Presets** (Pre-flight UI) and **Outcome Tagging** workflow.
-We will simulate three realistic negotiation scenarios to test different system configurations.
+This script verifies the **Negotiation Presets**, **Outcome Tagging**, **Signal Alerts**, and **Reflection Summary** features.
+We will simulate four realistic negotiation scenarios to test different system configurations.
 
 ## Prerequisites
 - [ ] Backend is running (`python main.py`) in `/backend`
@@ -104,7 +104,44 @@ We will simulate three realistic negotiation scenarios to test different system 
 
 ---
 
+## Use Case 4: Reflection Summary (Phase 4)
+**Objective:** Verify the AI-generated post-session reflection.
+
+### 1. Pre-Flight Setup
+1. Select Scenario: **Salary** (or any).
+2. Click **INITIALIZE SYSTEMS**.
+3. Click **Skip** (Mic Only).
+
+### 2. Session Simulation
+1. **Speak (User):** "I'd like to discuss my compensation."
+2. **Simulate Counterparty:** "We're offering $100k."
+3. **Wait for Advice:** AI should detect the anchor.
+4. Click **End Session** button.
+
+### 3. Outcome & Reflection
+1. In the Outcome Modal:
+   - Result: **WON**
+   - Confidence: **4**
+   - Notes: "Accepted $105k."
+2. Click **Save Outcome**.
+3. **Wait 3-5 seconds** for AI reflection to generate.
+4. **Verify:** "Session Reflection" modal appears with:
+   - ✅ **Strong Move**: What you did well
+   - ⚠️ **Missed Opportunity**: What you could improve
+   - 💡 **Tip for Next Time**: Actionable advice
+5. Click **Done**.
+6. **Verify:** App returns to Pre-Flight screen.
+
+### 4. Data Verification
+1. Open the latest `.json` file in `sessions/`.
+2. **Verify:**
+   - `reflection` object exists with `strong_move`, `missed_opportunity`, `improvement_tip`.
+
+---
+
 ## Known Issues / What to Watch For
 - **Window Dragging:** Can you drag the modals?
 - **Alerts:** Do error alerts appear if you stop the backend mid-session?
 - **Audio:** Does the "Share Audio" vs "Skip" flow work as expected after Pre-flight?
+- **Reflection Delay:** The AI takes 3-5 seconds to generate the summary.
+

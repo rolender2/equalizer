@@ -70,6 +70,48 @@ async def save_session_outcome(session_id: str, outcome: OutcomeRequest):
     return JSONResponse(status_code=404, content={"message": "Session not found"})
 
 
+@app.post("/sessions/{session_id}/summary")
+async def generate_session_summary(session_id: str):
+    """Generate a post-session reflection summary."""
+    from pathlib import Path
+    import json as json_module
+    
+    project_root = Path(__file__).resolve().parent.parent
+    session_path = project_root / "sessions" / f"{session_id}.json"
+    
+    if not session_path.exists():
+        return JSONResponse(status_code=404, content={"message": "Session not found"})
+    
+    try:
+        with open(session_path, 'r') as f:
+            session_data = json_module.load(f)
+        
+        # Build transcript text
+        transcripts = session_data.get("transcripts", [])
+        transcript_text = "\n".join([
+            f"[{t.get('speaker', 'UNKNOWN')}]: {t.get('text', '')}" 
+            for t in transcripts
+        ])
+        
+        outcome = session_data.get("outcome", {})
+        negotiation_type = session_data.get("negotiation_type", "General")
+        
+        # Create a Coach instance for summary generation
+        coach = Coach(negotiation_type=negotiation_type)
+        summary = await coach.generate_summary(transcript_text, outcome)
+        
+        # Save summary to session file
+        session_data["reflection"] = summary
+        with open(session_path, 'w') as f:
+            json_module.dump(session_data, f, indent=2)
+        
+        return summary
+        
+    except Exception as e:
+        logger.error(f"Error generating summary: {e}")
+        return JSONResponse(status_code=500, content={"message": str(e)})
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()

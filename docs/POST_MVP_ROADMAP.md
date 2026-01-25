@@ -9,10 +9,10 @@ Refine and tighten the MVP to increase user trust, relevance, and learning value
 
 | Priority | Feature | Complexity | Status |
 |----------|---------|------------|--------|
-| **Phase 1** | Outcome Tagging | Low | ❌ Pending |
-| **Phase 2** | Negotiation Presets | Medium | ❌ Pending |
-| **Phase 3** | Signal & Risk Alerts | High | ❌ Pending |
-| **Phase 4** | Reflection Summary | Medium | ❌ Pending |
+| **Phase 1** | Outcome Tagging | Low | ✅ Complete |
+| **Phase 2** | Negotiation Presets | Medium | ✅ Complete |
+| **Phase 3** | Signal & Risk Alerts | High | ✅ Complete |
+| **Phase 4** | Reflection Summary | Medium | ✅ Complete |
 
 ---
 

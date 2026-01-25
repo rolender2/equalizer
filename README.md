@@ -93,6 +93,17 @@ cd frontend && npm run electron:dev
    - Example: *"Don't accept yet. Ask for their best price first."*
 4. **Auto-dismiss** — Advice vanishes after 8 seconds
 
+### Negotiation Presets
+Before starting a session, select your scenario type from the **Pre-Flight** screen:
+
+| Preset | Use Case |
+|--------|----------|
+| **General** | Default balanced coaching |
+| **Salary** | Job offer negotiations |
+| **Vendor** | Supplier contract discussions |
+| **Renewal** | Contract renewal pushback |
+| **Scope** | Project scope negotiations |
+
 ### Coach Personalities
 Click the personality button below the status to cycle through coaching styles:
 
@@ -129,6 +140,8 @@ Each session file contains:
 - Timestamped transcripts
 - Advice given with personality used
 - Session summary stats
+- **Outcome tagging** (Won/Lost/Deferred)
+- **AI Reflection** (3 bullets: Strong Move, Missed Opportunity, Improvement Tip)
 
 ---
 
@@ -180,6 +193,7 @@ See [docs/POST_MVP_ROADMAP.md](docs/POST_MVP_ROADMAP.md) for detailed implementa
 - [x] System audio capture (hear both sides of call)
 - [x] Session recording to local JSON files
 - [x] Speaker diarization (identify who said what)
-
-**Upcoming:**
-- [ ] Session export/review UI
+- [x] Negotiation Presets (Salary, Vendor, Renewal, Scope, General)
+- [x] Outcome Tagging (Won/Lost/Deferred with confidence & notes)
+- [x] Signal & Risk Alerts (structured advice with strategic options)
+- [x] Post-Session Reflection (AI-generated 3-bullet summary)

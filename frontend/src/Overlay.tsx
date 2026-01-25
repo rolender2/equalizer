@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import OutcomeModal from './OutcomeModal';
 import PreFlight from './PreFlight';
+import SummaryView from './SummaryView';
 
 // Electron IPC for receiving toggle events
 const ipcRenderer = (window as any).require?.('electron')?.ipcRenderer;
@@ -64,6 +65,10 @@ export default function Overlay() {
     // MVP Tightening: Outcome Tagging
     const [sessionId, setSessionId] = useState<string>('');
     const [showOutcomeModal, setShowOutcomeModal] = useState(false);
+
+    // Phase 4: Reflection Summary
+    const [showSummary, setShowSummary] = useState(false);
+    const [summaryData, setSummaryData] = useState<any>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -554,8 +559,19 @@ export default function Overlay() {
                 </div>
             )}
             {advice && isListening && (
-                <div style={{ fontSize: '28px', marginTop: '8px' }}>
-                    {advice.toUpperCase()}
+                <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                    {advice.split('\n').map((line, i) => (
+                        <div key={i} style={{
+                            fontSize: i === 0 ? '16px' : '14px',
+                            fontWeight: i === 0 ? 'bold' : 'normal',
+                            color: i === 0 ? '#00ff00' : '#cccccc',
+                            marginBottom: i === 0 ? '8px' : '4px',
+                            textAlign: i === 0 ? 'center' : 'left',
+                            paddingLeft: i === 0 ? 0 : '10px'
+                        }}>
+                            {line.toUpperCase()}
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -601,11 +617,30 @@ export default function Overlay() {
                                 throw new Error(`Server returned ${response.status}: ${errText}`);
                             }
                             console.log('Outcome saved');
+
+                            // Generate reflection summary
+                            try {
+                                const summaryRes = await fetch(`http://127.0.0.1:8000/sessions/${sessionId}/summary`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' }
+                                });
+                                if (summaryRes.ok) {
+                                    const summary = await summaryRes.json();
+                                    setSummaryData(summary);
+                                    setShowOutcomeModal(false);
+                                    setShowSummary(true);
+                                    return; // Don't reset yet, show summary first
+                                }
+                            } catch (sumErr) {
+                                console.error('Summary generation failed:', sumErr);
+                            }
+
+                            // If summary fails, just reset
                             alert('Outcome Saved Successfully!');
                             setShowOutcomeModal(false);
                             setStatus('init');
-                            setIsListening(true); // Reset pause state
-                            setHasSelectedType(false); // Go back to Pre-Flight
+                            setIsListening(true);
+                            setHasSelectedType(false);
                             setAdvice(null);
                         } catch (err: any) {
                             console.error(err);
@@ -613,6 +648,37 @@ export default function Overlay() {
                         }
                     }}
                 />
+            )}
+
+            {/* Phase 4: Reflection Summary */}
+            {showSummary && summaryData && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    background: 'rgba(0, 0, 0, 0.7)',
+                    zIndex: 1000,
+                    // @ts-ignore
+                    WebkitAppRegion: 'no-drag',
+                    pointerEvents: 'auto'
+                }}>
+                    <SummaryView
+                        summary={summaryData}
+                        onClose={() => {
+                            setShowSummary(false);
+                            setSummaryData(null);
+                            setStatus('init');
+                            setIsListening(true);
+                            setHasSelectedType(false);
+                            setAdvice(null);
+                        }}
+                    />
+                </div>
             )}
         </div>
     );

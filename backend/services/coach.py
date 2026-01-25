@@ -119,3 +119,53 @@ class Coach:
         except Exception as e:
             logger.error(f"Error generating advice: {e}")
             return ""
+
+    async def generate_summary(self, transcript: str, outcome: dict) -> dict:
+        """
+        Generate a post-session reflection summary.
+        Returns 3 bullets: Strong Move, Missed Opportunity, Improvement Tip.
+        """
+        result = outcome.get("result", "unknown")
+        notes = outcome.get("notes", "")
+        
+        prompt = f"""You are analyzing a completed {self.negotiation_type} negotiation.
+Outcome: {result.upper()}
+User Notes: {notes}
+
+Based on the transcript below, provide exactly 3 insights:
+1. STRONG_MOVE: One thing the user did well
+2. MISSED_OPPORTUNITY: One thing they could have done better  
+3. IMPROVEMENT_TIP: One specific actionable tip for next time
+
+Be concise (1 sentence each). Focus on tactical negotiation skills.
+
+Transcript:
+{transcript}
+
+Respond in JSON format:
+{{"strong_move": "...", "missed_opportunity": "...", "improvement_tip": "..."}}"""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a negotiation coach providing post-session feedback."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                temperature=0.7,
+                response_format={"type": "json_object"}
+            )
+            content = response.choices[0].message.content.strip()
+            
+            try:
+                data = json.loads(content)
+                logger.info(f"Generated Summary: {data}")
+                return data
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse summary JSON: {content}")
+                return {"error": "Failed to generate summary"}
+                
+        except Exception as e:
+            logger.error(f"Error generating summary: {e}")
+            return {"error": str(e)}
