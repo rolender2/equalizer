@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from services.audio_processor import AudioProcessor
 from services.coach import Coach
-from services.personalities import list_personalities, DEFAULT_PERSONALITY
+from services.personalities import list_personalities, DEFAULT_PERSONALITY, list_negotiation_types, DEFAULT_NEGOTIATION_TYPE, get_personality
 from services.session_recorder import SessionRecorder
 
 # Load env variables
@@ -39,6 +39,36 @@ async def get_personalities():
         "default": DEFAULT_PERSONALITY
     })
 
+@app.get("/negotiation-types")
+async def get_negotiation_types():
+    """List available negotiation types."""
+    return JSONResponse(content={
+        "types": list_negotiation_types(),
+        "default": DEFAULT_NEGOTIATION_TYPE
+    })
+
+
+from pydantic import BaseModel
+
+class OutcomeRequest(BaseModel):
+    result: str
+    confidence: int
+    notes: str = ""
+
+@app.post("/sessions/{session_id}/outcome")
+async def save_session_outcome(session_id: str, outcome: OutcomeRequest):
+    """Save the outcome for a completed session."""
+    logger.info(f"Received outcome for session {session_id}: {outcome}")
+    success = SessionRecorder.update_outcome(
+        session_id, 
+        outcome.result, 
+        outcome.confidence, 
+        outcome.notes
+    )
+    if success:
+        return {"status": "success"}
+    return JSONResponse(status_code=404, content={"message": "Session not found"})
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -46,8 +76,14 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info("Client connected")
     
     # Create per-session instances
-    coach = Coach()
-    recorder = SessionRecorder(personality=coach.personality)
+    coach = Coach(negotiation_type=DEFAULT_NEGOTIATION_TYPE)
+    recorder = SessionRecorder(personality=coach.personality, negotiation_type=DEFAULT_NEGOTIATION_TYPE)
+    
+    # Send session ID to frontend immediately
+    await websocket.send_text(json.dumps({
+        "type": "session_init",
+        "session_id": recorder.session_id
+    }))
     
     # Callback to run when Deepgram detects a sentence/pause
     def on_transcript(transcript: str, speaker: int = 0):
@@ -94,6 +130,21 @@ async def websocket_endpoint(websocket: WebSocket):
                             "type": "personality_changed",
                             "personality": new_personality
                         }))
+                    elif data.get("type") == "config":
+                        # Updated Init / Pre-flight config
+                        new_type = data.get("negotiation_type", DEFAULT_NEGOTIATION_TYPE)
+                        coach.set_negotiation_type(new_type)
+                        # Re-init recorder with new type? Or just update it?
+                        # Since recorder writes type on save, updating instance is fine.
+                        recorder.negotiation_type = new_type
+                        # Also check if they sent a personality
+                        if "personality" in data:
+                            p = data["personality"]
+                            coach.set_personality(p)
+                            recorder.set_personality(p)
+                        
+                        logger.info(f"Session configured: Type={new_type}")
+                        
                 except json.JSONDecodeError:
                     logger.warning(f"Received invalid JSON: {message['text']}")
             

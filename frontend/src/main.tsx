@@ -7,7 +7,5 @@ import './index.css'
 document.body.style.backgroundColor = 'transparent';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-        <App />
-    </React.StrictMode>,
+    <App />
 )
