@@ -13,7 +13,7 @@ Evolve Sidekick from MVP to a production-ready negotiation assistant with enhanc
 | **P2** | Keyboard Toggle | Low | ✅ Complete |
 | **P3** | Position Persistence | Low | ✅ Complete |
 | **P4** | Custom Coach Personalities | Medium | ✅ Complete |
-| **P5** | Speaker Diarization | Medium | ❌ Pending |
+| **P5** | Speaker Diarization | Medium | ✅ Complete |
 
 ---
 

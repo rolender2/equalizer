@@ -50,12 +50,14 @@ async def websocket_endpoint(websocket: WebSocket):
     recorder = SessionRecorder(personality=coach.personality)
     
     # Callback to run when Deepgram detects a sentence/pause
-    def on_transcript(transcript: str):
-        # Record the transcript
-        recorder.add_transcript(transcript)
-        # Schedule async coach processing
+    def on_transcript(transcript: str, speaker: int = 0):
+        # Map speaker to label
+        speaker_label = "USER" if speaker == 0 else f"COUNTERPARTY"
+        # Record the transcript with speaker
+        recorder.add_transcript(transcript, speaker=speaker_label)
+        # Schedule async coach processing with speaker context
         asyncio.run_coroutine_threadsafe(
-            process_transcript_and_advise(transcript, websocket, coach, recorder), 
+            process_transcript_and_advise(transcript, speaker_label, websocket, coach, recorder), 
             loop
         )
 
@@ -105,25 +107,29 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 async def process_transcript_and_advise(
-    transcript: str, 
+    transcript: str,
+    speaker: str,
     websocket: WebSocket, 
     coach: Coach,
     recorder: SessionRecorder
 ):
     """
     The Brain Logic:
-    1. Check if advice is necessary.
+    1. Check if advice is necessary (especially for counterparty statements).
     2. If yes, generate advice.
     3. Send to Frontend and record.
     """
-    logger.info(f"Processing transcript: {transcript}")
+    logger.info(f"Processing [{speaker}]: {transcript}")
     
-    # Step 1: Gatekeeper
-    if await coach.evaluate_necessity(transcript):
+    # Format transcript with speaker for coach context
+    formatted = f"[{speaker}]: {transcript}"
+    
+    # Step 1: Gatekeeper - more likely to advise on counterparty statements
+    if await coach.evaluate_necessity(formatted):
         logger.info("Advice WARRANTED. Generating...")
         
-        # Step 2: Generation
-        advice = await coach.generate_advice(transcript)
+        # Step 2: Generation with speaker context
+        advice = await coach.generate_advice(formatted)
         
         if advice:
             logger.info(f"Sending Advice: {advice}")

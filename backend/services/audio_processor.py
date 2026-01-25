@@ -12,8 +12,13 @@ DEEPGRAM_URL = "wss://api.deepgram.com/v1/listen"
 class AudioProcessor:
     """
     Handles streaming audio to Deepgram using raw WebSockets.
+    Now includes speaker diarization support.
     """
     def __init__(self, transcript_callback):
+        """
+        Args:
+            transcript_callback: Function that takes (transcript: str, speaker: int)
+        """
         self.transcript_callback = transcript_callback
         self.api_key = os.getenv("DEEPGRAM_API_KEY")
         self.ws = None
@@ -21,9 +26,9 @@ class AudioProcessor:
         self._connected = False
 
     async def start(self):
-        """Initializes the Deepgram WebSocket Connection."""
+        """Initializes the Deepgram WebSocket Connection with diarization."""
         try:
-            # Build the URL with query parameters
+            # Build the URL with query parameters including diarization
             url = (
                 f"{DEEPGRAM_URL}"
                 f"?model=nova-2"
@@ -33,6 +38,7 @@ class AudioProcessor:
                 f"&channels=1"
                 f"&sample_rate=16000"
                 f"&endpointing=300"
+                f"&diarize=true"  # Enable speaker diarization
             )
 
             # Connect with API key in header
@@ -42,7 +48,7 @@ class AudioProcessor:
             )
             self._connected = True
             
-            logger.info("Deepgram WebSocket Connection Established")
+            logger.info("Deepgram WebSocket Connection Established (diarization enabled)")
 
             # Start receiving messages in the background
             self._receive_task = asyncio.create_task(self._receive_messages())
@@ -69,12 +75,19 @@ class AudioProcessor:
                         is_final = data.get("is_final", False)
                         speech_final = data.get("speech_final", False)
                         
+                        # Extract speaker from words array
+                        words = alternatives[0].get("words", [])
+                        speaker = 0  # Default to speaker 0
+                        if words:
+                            # Get the speaker of the first word in this utterance
+                            speaker = words[0].get("speaker", 0)
+                        
                         if transcript and speech_final:
-                            logger.info(f"Speech Final: {transcript}")
+                            logger.info(f"[Speaker {speaker}] Speech Final: {transcript}")
                             if self.transcript_callback:
-                                self.transcript_callback(transcript)
+                                self.transcript_callback(transcript, speaker)
                         elif transcript and is_final:
-                            logger.debug(f"Intermediate Final: {transcript}")
+                            logger.debug(f"[Speaker {speaker}] Intermediate Final: {transcript}")
                             
         except ConnectionClosed:
             logger.info("Deepgram connection closed")
@@ -100,3 +113,4 @@ class AudioProcessor:
         if self.ws:
             await self.ws.close()
             logger.info("Deepgram Connection Closed")
+

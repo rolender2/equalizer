@@ -24,7 +24,7 @@ class Coach:
     async def evaluate_necessity(self, transcript: str) -> bool:
         """
         Determines if advice is warranted based on the transcript.
-        For MVP: More permissive to demonstrate the UI.
+        Now speaker-aware: prioritizes advice when counterparty speaks.
         """
         if not transcript or len(transcript.strip()) < 10:
             return False
@@ -33,15 +33,18 @@ class Coach:
             response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": """You are a negotiation coach watching a live conversation. 
-                    Your job is to decide if you should interrupt with tactical advice.
+                    {"role": "system", "content": """You are a negotiation coach watching a live conversation.
+                    Transcripts are labeled as [USER] (your client) or [COUNTERPARTY] (the other side).
                     
                     Say YES if:
-                    - The speaker is about to make a mistake (accepting too fast, revealing information, etc.)
-                    - There's a tactical opportunity (silence, counter-offer, etc.)
-                    - The speaker sounds uncertain or is asking for help
+                    - [COUNTERPARTY] makes an offer, demand, or statement that needs a response strategy
+                    - [USER] is about to make a mistake (accepting too fast, revealing info, etc.)
+                    - There's a tactical opportunity (silence, counter-offer, anchoring, etc.)
+                    - [USER] sounds uncertain or needs encouragement
                     
-                    Say NO only if the speech is completely irrelevant small talk.
+                    Say NO if:
+                    - It's completely irrelevant small talk
+                    - [USER] is doing well and doesn't need intervention
                     
                     Reply ONLY 'YES' or 'NO'."""},
                     {"role": "user", "content": transcript}

@@ -117,6 +117,7 @@ Click the personality button below the status to cycle through coaching styles:
 | ⏸️ PAUSED | Listening paused (press Ctrl+Shift+S to resume) |
 | 🎤 + 🔊 | Mic + System Audio both captured |
 | 🎤 Mic Only | Only microphone audio (system audio declined) |
+| 🗣️ Diarization | Speaker 0 (You) vs. Speaker 1+ (Counterparty) identification |
 
 ### Session Recording
 All sessions are automatically recorded to:
@@ -178,7 +179,7 @@ See [docs/POST_MVP_ROADMAP.md](docs/POST_MVP_ROADMAP.md) for detailed implementa
 - [x] Custom Coach personalities (Tactical, Diplomatic, Socratic, Power)
 - [x] System audio capture (hear both sides of call)
 - [x] Session recording to local JSON files
+- [x] Speaker diarization (identify who said what)
 
 **Upcoming:**
-- [ ] Speaker diarization (identify who said what)
 - [ ] Session export/review UI
