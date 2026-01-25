@@ -50,6 +50,15 @@ function createWindow() {
     mainWindow.setIgnoreMouseEvents(false);
     mainWindow.loadURL('http://localhost:5173');
 
+    // Ensure always on top works on Linux
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+
+    // Focus the window after a short delay to bring it to front
+    setTimeout(() => {
+        mainWindow.setAlwaysOnTop(true, 'screen-saver');
+        mainWindow.focus();
+    }, 1000);
+
     // Save position when window moves
     mainWindow.on('moved', () => {
         const bounds = mainWindow.getBounds();

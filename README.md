@@ -93,12 +93,28 @@ cd frontend && npm run electron:dev
    - Example: *"Don't accept yet. Ask for their best price first."*
 4. **Auto-dismiss** — Advice vanishes after 8 seconds
 
+### Coach Personalities
+Click the personality button below the status to cycle through coaching styles:
+
+| Personality | Icon | Style |
+|-------------|------|-------|
+| **Tactical** | ⚔️ | Direct, commanding, military-style advice |
+| **Diplomatic** | 🤝 | Gentle, relationship-focused suggestions |
+| **Socratic** | 🤔 | Thought-provoking questions |
+| **Power** | 💪 | Bold, aggressive demands |
+
+### Keyboard Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+S` | Toggle pause/resume listening |
+
 ### Status Indicators
 | Status | Meaning |
 |--------|---------|
 | 🎤 LISTENING... | Connected and monitoring audio |
 | ⏳ CONNECTING... | Attempting to connect to backend |
 | ⚠️ CONNECTION ERROR | Backend not running or unreachable |
+| ⏸️ PAUSED | Listening paused (press Ctrl+Shift+S to resume) |
 
 ---
 
@@ -122,7 +138,8 @@ equalizer/
 │   ├── main.py              # FastAPI WebSocket server
 │   ├── services/
 │   │   ├── audio_processor.py  # Deepgram WebSocket client
-│   │   └── coach.py            # GPT-4o-mini advisor logic
+│   │   ├── coach.py            # GPT-4o-mini advisor logic
+│   │   └── personalities.py    # Coach personality definitions
 │   ├── .env                 # API keys (not in git)
 │   └── requirements.txt
 ├── frontend/
@@ -145,7 +162,8 @@ See [docs/POST_MVP_ROADMAP.md](docs/POST_MVP_ROADMAP.md) for detailed implementa
 **Completed:**
 - [x] Keyboard shortcut to toggle listening (Ctrl+Shift+S)
 - [x] Persist overlay position across sessions
+- [x] Custom Coach personalities (Tactical, Diplomatic, Socratic, Power)
 
 **Upcoming:**
-- [ ] Custom Coach personalities (aggressive vs. diplomatic)
 - [ ] Capture system audio (hear both sides of call)
+- [ ] Session recording and transcript export

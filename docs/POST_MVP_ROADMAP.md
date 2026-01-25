@@ -7,12 +7,12 @@ Evolve Sidekick from MVP to a production-ready negotiation assistant with enhanc
 
 ## 📋 Feature Prioritization
 
-| Priority | Feature | Complexity | Value |
-|----------|---------|------------|-------|
-| **P1** | System Audio Capture | High | Critical - hear both sides |
-| **P2** | Keyboard Toggle | Low | High - privacy control |
-| **P3** | Position Persistence | Low | Medium - UX polish |
-| **P4** | Custom Coach Personalities | Medium | Medium - personalization |
+| Priority | Feature | Complexity | Status |
+|----------|---------|------------|--------|
+| **P1** | System Audio Capture | High | ❌ Pending |
+| **P2** | Keyboard Toggle | Low | ✅ Complete |
+| **P3** | Position Persistence | Low | ✅ Complete |
+| **P4** | Custom Coach Personalities | Medium | ✅ Complete |
 
 ---
 

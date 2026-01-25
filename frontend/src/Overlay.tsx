@@ -6,10 +6,19 @@ const ipcRenderer = (window as any).require?.('electron')?.ipcRenderer;
 const ADVICE_DURATION_MS = 8000;
 const SAMPLE_RATE = 16000;
 
+// Available coach personalities
+const PERSONALITIES = [
+    { id: 'tactical', name: 'Tactical', icon: '⚔️' },
+    { id: 'diplomatic', name: 'Diplomatic', icon: '🤝' },
+    { id: 'socratic', name: 'Socratic', icon: '🤔' },
+    { id: 'aggressive', name: 'Power', icon: '💪' },
+];
+
 export default function Overlay() {
     const [advice, setAdvice] = useState<string | null>(null);
     const [status, setStatus] = useState<string>('connecting');
     const [isListening, setIsListening] = useState(true);
+    const [personality, setPersonality] = useState('tactical');
     const socketRef = useRef<WebSocket | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -48,6 +57,22 @@ export default function Overlay() {
         }
     }, [advice]);
 
+    // Cycle through personalities
+    const cyclePersonality = () => {
+        const currentIndex = PERSONALITIES.findIndex(p => p.id === personality);
+        const nextIndex = (currentIndex + 1) % PERSONALITIES.length;
+        const newPersonality = PERSONALITIES[nextIndex].id;
+        setPersonality(newPersonality);
+
+        // Send personality change to backend
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify({
+                type: 'personality',
+                personality: newPersonality
+            }));
+        }
+    };
+
     // Main Wiring: Mic -> Socket
     useEffect(() => {
         let processor: ScriptProcessorNode | null = null;
@@ -70,8 +95,18 @@ export default function Overlay() {
                 setStatus('connected');
 
                 ws.onmessage = (event) => {
-                    console.log('Advice received:', event.data);
-                    setAdvice(event.data);
+                    console.log('Message received:', event.data);
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'advice') {
+                            setAdvice(data.content);
+                        } else if (data.type === 'personality_changed') {
+                            console.log('Personality confirmed:', data.personality);
+                        }
+                    } catch {
+                        // Legacy: plain text advice (backwards compatibility)
+                        setAdvice(event.data);
+                    }
                 };
 
                 ws.onclose = () => setStatus('connecting');
@@ -126,6 +161,7 @@ export default function Overlay() {
     };
 
     const displayStatus = getDisplayStatus();
+    const currentPersonality = PERSONALITIES.find(p => p.id === personality);
 
     return (
         <div
@@ -171,10 +207,37 @@ export default function Overlay() {
                 </div>
             )}
             {advice && isListening && (
-                <div style={{ fontSize: '28px' }}>
+                <div style={{ fontSize: '28px', marginTop: '8px' }}>
                     {advice.toUpperCase()}
                 </div>
             )}
+
+            {/* Personality Selector Button - Centered below status */}
+            <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    console.log('Personality button clicked');
+                    cyclePersonality();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{
+                    // @ts-ignore - Electron-specific CSS property
+                    WebkitAppRegion: 'no-drag',
+                    marginTop: '12px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(0, 255, 65, 0.4)',
+                    borderRadius: '6px',
+                    padding: '4px 14px',
+                    color: '#00ff41',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontFamily: 'monospace',
+                    pointerEvents: 'auto',
+                }}
+                title="Click to change coaching style"
+            >
+                {currentPersonality?.icon} {currentPersonality?.name}
+            </button>
         </div>
     );
 }
