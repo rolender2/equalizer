@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from services.audio_processor import AudioProcessor
 from services.coach import Coach
 from services.personalities import list_personalities, DEFAULT_PERSONALITY
+from services.session_recorder import SessionRecorder
 
 # Load env variables
 load_dotenv()
@@ -44,13 +45,19 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     logger.info("Client connected")
     
-    # Create a per-session coach instance
+    # Create per-session instances
     coach = Coach()
+    recorder = SessionRecorder(personality=coach.personality)
     
     # Callback to run when Deepgram detects a sentence/pause
     def on_transcript(transcript: str):
-        # We need to schedule the async coach processing from this sync callback
-        asyncio.run_coroutine_threadsafe(process_transcript_and_advise(transcript, websocket, coach), loop)
+        # Record the transcript
+        recorder.add_transcript(transcript)
+        # Schedule async coach processing
+        asyncio.run_coroutine_threadsafe(
+            process_transcript_and_advise(transcript, websocket, coach, recorder), 
+            loop
+        )
 
     # Initialize AudioProcessor with the callback
     processor = AudioProcessor(transcript_callback=on_transcript)
@@ -70,15 +77,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 break
             
             if "bytes" in message:
-                # Binary audio chunk from microphone
+                # Binary audio chunk from microphone (or mixed audio)
                 await processor.send_audio(message["bytes"])
             elif "text" in message:
-                # Text message - personality change command
+                # Text message - personality change or other commands
                 try:
                     data = json.loads(message["text"])
                     if data.get("type") == "personality":
                         new_personality = data.get("personality", DEFAULT_PERSONALITY)
                         coach.set_personality(new_personality)
+                        recorder.set_personality(new_personality)
                         logger.info(f"Personality changed to: {new_personality}")
                         await websocket.send_text(json.dumps({
                             "type": "personality_changed",
@@ -93,14 +101,20 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"Connection error: {e}")
     finally:
         await processor.stop()
+        recorder.close()
 
 
-async def process_transcript_and_advise(transcript: str, websocket: WebSocket, coach: Coach):
+async def process_transcript_and_advise(
+    transcript: str, 
+    websocket: WebSocket, 
+    coach: Coach,
+    recorder: SessionRecorder
+):
     """
     The Brain Logic:
     1. Check if advice is necessary.
     2. If yes, generate advice.
-    3. Send to Frontend.
+    3. Send to Frontend and record.
     """
     logger.info(f"Processing transcript: {transcript}")
     
@@ -113,7 +127,9 @@ async def process_transcript_and_advise(transcript: str, websocket: WebSocket, c
         
         if advice:
             logger.info(f"Sending Advice: {advice}")
-            # Step 3: Send to UI (as JSON to distinguish from control messages)
+            # Record the advice
+            recorder.add_advice(advice)
+            # Step 3: Send to UI
             await websocket.send_text(json.dumps({
                 "type": "advice",
                 "content": advice

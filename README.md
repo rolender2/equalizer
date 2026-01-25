@@ -115,6 +115,19 @@ Click the personality button below the status to cycle through coaching styles:
 | ⏳ CONNECTING... | Attempting to connect to backend |
 | ⚠️ CONNECTION ERROR | Backend not running or unreachable |
 | ⏸️ PAUSED | Listening paused (press Ctrl+Shift+S to resume) |
+| 🎤 + 🔊 | Mic + System Audio both captured |
+| 🎤 Mic Only | Only microphone audio (system audio declined) |
+
+### Session Recording
+All sessions are automatically recorded to:
+```
+~/Documents/Sidekick/sessions/YYYY-MM-DD_HHMMSS.json
+```
+
+Each session file contains:
+- Timestamped transcripts
+- Advice given with personality used
+- Session summary stats
 
 ---
 
@@ -163,7 +176,9 @@ See [docs/POST_MVP_ROADMAP.md](docs/POST_MVP_ROADMAP.md) for detailed implementa
 - [x] Keyboard shortcut to toggle listening (Ctrl+Shift+S)
 - [x] Persist overlay position across sessions
 - [x] Custom Coach personalities (Tactical, Diplomatic, Socratic, Power)
+- [x] System audio capture (hear both sides of call)
+- [x] Session recording to local JSON files
 
 **Upcoming:**
-- [ ] Capture system audio (hear both sides of call)
-- [ ] Session recording and transcript export
+- [ ] Speaker diarization (identify who said what)
+- [ ] Session export/review UI

@@ -50,14 +50,33 @@ function createWindow() {
     mainWindow.setIgnoreMouseEvents(false);
     mainWindow.loadURL('http://localhost:5173');
 
-    // Ensure always on top works on Linux
-    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    // Aggressive always-on-top handling for Linux
+    const forceOnTop = () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setAlwaysOnTop(true, 'floating');
+            mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        }
+    };
 
-    // Focus the window after a short delay to bring it to front
-    setTimeout(() => {
-        mainWindow.setAlwaysOnTop(true, 'screen-saver');
-        mainWindow.focus();
-    }, 1000);
+    // Apply immediately
+    forceOnTop();
+
+    // Re-apply after load
+    mainWindow.webContents.on('did-finish-load', forceOnTop);
+
+    // Re-apply when shown
+    mainWindow.on('show', forceOnTop);
+
+    // Re-apply on focus
+    mainWindow.on('focus', forceOnTop);
+
+    // Periodic re-apply for stubborn window managers (every 2 seconds for first 10 seconds)
+    let attempts = 0;
+    const interval = setInterval(() => {
+        forceOnTop();
+        attempts++;
+        if (attempts >= 5) clearInterval(interval);
+    }, 2000);
 
     // Save position when window moves
     mainWindow.on('moved', () => {

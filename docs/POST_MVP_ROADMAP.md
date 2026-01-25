@@ -9,10 +9,11 @@ Evolve Sidekick from MVP to a production-ready negotiation assistant with enhanc
 
 | Priority | Feature | Complexity | Status |
 |----------|---------|------------|--------|
-| **P1** | System Audio Capture | High | ❌ Pending |
+| **P1** | System Audio Capture | High | ✅ Complete |
 | **P2** | Keyboard Toggle | Low | ✅ Complete |
 | **P3** | Position Persistence | Low | ✅ Complete |
 | **P4** | Custom Coach Personalities | Medium | ✅ Complete |
+| **P5** | Speaker Diarization | Medium | ❌ Pending |
 
 ---
 
@@ -111,6 +112,30 @@ PERSONALITIES = {
 
 ---
 
+## P5: Speaker Diarization
+
+> [!IMPORTANT]
+> **Value**: Allows coach to distinguish between you and the other party, enabling more contextual advice like "They just said X, counter with Y."
+
+### How Deepgram Diarization Works
+- Enable `diarize=true` in the Deepgram request
+- Transcripts return with `speaker: 0`, `speaker: 1` labels
+- We can identify which speaker is the user (typically the one who speaks first)
+
+### Implementation
+
+#### [MODIFY] [audio_processor.py](file:///home/robert/Coding/equalizer/backend/services/audio_processor.py)
+- Add `diarize=true` to Deepgram connection options
+- Parse speaker labels from response
+- Include speaker info in transcript callback
+
+#### [MODIFY] [coach.py](file:///home/robert/Coding/equalizer/backend/services/coach.py)
+- Update prompts to leverage speaker context
+- "Speaker 0 (You)" vs "Speaker 1 (Counterparty)"
+- Generate advice specifically about what the OTHER person said
+
+---
+
 ## Verification Plan
 
 | Feature | Test |
@@ -119,14 +144,16 @@ PERSONALITIES = {
 | P2 Keyboard Toggle | Press hotkey, verify "⏸️ PAUSED" shows |
 | P3 Position | Drag overlay, restart app, verify position restored |
 | P4 Personalities | Switch to Diplomatic, verify softer tone in advice |
+| P5 Diarization | Two people speak, verify speaker labels in logs |
 
 ---
 
 ## Recommended Order
-1. **P2 (Keyboard Toggle)** - Quick win, high value, ~30 min
-2. **P3 (Position Persistence)** - Quick win, UX polish, ~20 min
-3. **P4 (Personalities)** - Medium effort, fun, ~1-2 hours
-4. **P1 (System Audio)** - Complex, requires testing, ~4+ hours
+1. ~~**P2 (Keyboard Toggle)**~~ ✅ Complete
+2. ~~**P3 (Position Persistence)**~~ ✅ Complete
+3. ~~**P4 (Personalities)**~~ ✅ Complete
+4. **P5 (Speaker Diarization)** - Medium effort, high value, ~3-4 hours
+5. **P1 (System Audio)** - Complex, requires testing, ~4+ hours
 
 ---
 

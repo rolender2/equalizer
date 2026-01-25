@@ -14,14 +14,53 @@ const PERSONALITIES = [
     { id: 'aggressive', name: 'Power', icon: '💪' },
 ];
 
+// Audio Level Meter Component
+function AudioMeter({ level, label }: { level: number; label: string }) {
+    const barCount = 8;
+    const activeCount = Math.round(level * barCount);
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px' }}>
+            <span style={{ opacity: 0.7, minWidth: '24px' }}>{label}</span>
+            <div style={{ display: 'flex', gap: '2px' }}>
+                {Array.from({ length: barCount }).map((_, i) => (
+                    <div
+                        key={i}
+                        style={{
+                            width: '4px',
+                            height: '12px',
+                            backgroundColor: i < activeCount
+                                ? (i > barCount * 0.7 ? '#ff4444' : '#00ff41')
+                                : 'rgba(255, 255, 255, 0.2)',
+                            borderRadius: '1px',
+                            transition: 'background-color 0.1s',
+                        }}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export default function Overlay() {
     const [advice, setAdvice] = useState<string | null>(null);
-    const [status, setStatus] = useState<string>('connecting');
+    const [status, setStatus] = useState<string>('init'); // 'init' | 'connecting' | 'connected' | 'paused' | 'error'
     const [isListening, setIsListening] = useState(true);
     const [personality, setPersonality] = useState('tactical');
+    const [hasSystemAudio, setHasSystemAudio] = useState(false);
+    const [micLevel, setMicLevel] = useState(0);
+    const [systemLevel, setSystemLevel] = useState(0);
+    const [skipSystemAudio, setSkipSystemAudio] = useState(() => {
+        // Load preference from localStorage
+        return localStorage.getItem('skipSystemAudio') === 'true';
+    });
+
     const socketRef = useRef<WebSocket | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
+    const micAnalyserRef = useRef<AnalyserNode | null>(null);
+    const systemAnalyserRef = useRef<AnalyserNode | null>(null);
+    const animationRef = useRef<number | null>(null);
 
     // Listen for toggle shortcut from Electron main process
     useEffect(() => {
@@ -57,6 +96,35 @@ export default function Overlay() {
         }
     }, [advice]);
 
+    // Audio level meter animation loop
+    useEffect(() => {
+        const updateLevels = () => {
+            if (micAnalyserRef.current) {
+                const dataArray = new Uint8Array(micAnalyserRef.current.frequencyBinCount);
+                micAnalyserRef.current.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                setMicLevel(average / 255);
+            }
+            if (systemAnalyserRef.current) {
+                const dataArray = new Uint8Array(systemAnalyserRef.current.frequencyBinCount);
+                systemAnalyserRef.current.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                setSystemLevel(average / 255);
+            }
+            animationRef.current = requestAnimationFrame(updateLevels);
+        };
+
+        if (status === 'connected') {
+            updateLevels();
+        }
+
+        return () => {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+            }
+        };
+    }, [status]);
+
     // Cycle through personalities
     const cyclePersonality = () => {
         const currentIndex = PERSONALITIES.findIndex(p => p.id === personality);
@@ -73,77 +141,160 @@ export default function Overlay() {
         }
     };
 
-    // Main Wiring: Mic -> Socket
-    useEffect(() => {
-        let processor: ScriptProcessorNode | null = null;
-        let microphone: MediaStreamAudioSourceNode | null = null;
-        let stream: MediaStream | null = null;
+    // Request system audio capture
+    const requestSystemAudio = async (): Promise<MediaStream | null> => {
+        try {
+            // Use getDisplayMedia with audio to capture system/tab audio
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { width: 1, height: 1 }, // Minimal video (required but we don't use it)
+                audio: true
+            });
 
-        const connect = async () => {
-            try {
-                const ws = new WebSocket('ws://127.0.0.1:8000/ws');
-                socketRef.current = ws;
+            // Stop the video track immediately - we only want audio
+            stream.getVideoTracks().forEach(track => track.stop());
 
-                await new Promise<void>((resolve, reject) => {
-                    ws.onopen = () => {
-                        console.log('WS Connected');
-                        resolve();
-                    };
-                    ws.onerror = () => reject(new Error('WebSocket error'));
-                });
-
-                setStatus('connected');
-
-                ws.onmessage = (event) => {
-                    console.log('Message received:', event.data);
-                    try {
-                        const data = JSON.parse(event.data);
-                        if (data.type === 'advice') {
-                            setAdvice(data.content);
-                        } else if (data.type === 'personality_changed') {
-                            console.log('Personality confirmed:', data.personality);
-                        }
-                    } catch {
-                        // Legacy: plain text advice (backwards compatibility)
-                        setAdvice(event.data);
-                    }
-                };
-
-                ws.onclose = () => setStatus('connecting');
-
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const audioContext = new window.AudioContext({ sampleRate: SAMPLE_RATE });
-                audioContextRef.current = audioContext;
-                microphone = audioContext.createMediaStreamSource(stream);
-                processor = audioContext.createScriptProcessor(4096, 1, 1);
-                processorRef.current = processor;
-
-                processor.onaudioprocess = (e) => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        const inputData = e.inputBuffer.getChannelData(0);
-                        const pcmData = floatTo16BitPCM(inputData);
-                        ws.send(pcmData);
-                    }
-                };
-
-                microphone.connect(processor);
-                processor.connect(audioContext.destination);
-
-            } catch (err) {
-                console.error('Error connecting:', err);
-                setStatus('error');
+            const audioTracks = stream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                console.log('System audio captured:', audioTracks[0].label);
+                setHasSystemAudio(true);
+                return stream;
+            } else {
+                console.log('No audio track in display media');
+                return null;
             }
-        };
+        } catch (err) {
+            console.log('System audio not available or denied:', err);
+            return null;
+        }
+    };
 
-        connect();
+    // Start the connection with audio
+    const startConnection = async (withSystemAudio: boolean) => {
+        setStatus('connecting');
 
-        return () => {
-            if (socketRef.current) socketRef.current.close();
-            if (audioContextRef.current) audioContextRef.current.close();
-            if (microphone) microphone.disconnect();
-            if (processor) processor.disconnect();
-        };
-    }, []);
+        let processor: ScriptProcessorNode | null = null;
+        let micSource: MediaStreamAudioSourceNode | null = null;
+        let systemSource: MediaStreamAudioSourceNode | null = null;
+        let micStream: MediaStream | null = null;
+        let systemStream: MediaStream | null = null;
+
+        try {
+            const ws = new WebSocket('ws://127.0.0.1:8000/ws');
+            socketRef.current = ws;
+
+            await new Promise<void>((resolve, reject) => {
+                ws.onopen = () => {
+                    console.log('WS Connected');
+                    resolve();
+                };
+                ws.onerror = () => reject(new Error('WebSocket error'));
+            });
+
+            ws.onmessage = (event) => {
+                console.log('Message received:', event.data);
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'advice') {
+                        setAdvice(data.content);
+                    } else if (data.type === 'personality_changed') {
+                        console.log('Personality confirmed:', data.personality);
+                    }
+                } catch {
+                    // Legacy: plain text advice (backwards compatibility)
+                    setAdvice(event.data);
+                }
+            };
+
+            ws.onclose = () => setStatus('connecting');
+
+            // Create audio context
+            const audioContext = new window.AudioContext({ sampleRate: SAMPLE_RATE });
+            audioContextRef.current = audioContext;
+
+            // Create analysers for level meters
+            const micAnalyser = audioContext.createAnalyser();
+            micAnalyser.fftSize = 256;
+            micAnalyserRef.current = micAnalyser;
+
+            // Create a merger to combine mic + system audio
+            const merger = audioContext.createChannelMerger(2);
+
+            // Get microphone audio
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            micSource = audioContext.createMediaStreamSource(micStream);
+            micSource.connect(micAnalyser);
+
+            // Try to get system audio if requested
+            if (withSystemAudio) {
+                systemStream = await requestSystemAudio();
+                if (systemStream && systemStream.getAudioTracks().length > 0) {
+                    systemSource = audioContext.createMediaStreamSource(systemStream);
+
+                    const systemAnalyser = audioContext.createAnalyser();
+                    systemAnalyser.fftSize = 256;
+                    systemAnalyserRef.current = systemAnalyser;
+                    systemSource.connect(systemAnalyser);
+                }
+            }
+
+            // Create processor for audio processing
+            processor = audioContext.createScriptProcessor(4096, 2, 1);
+            processorRef.current = processor;
+
+            // Connect sources to merger
+            micSource.connect(merger, 0, 0);
+            if (systemSource) {
+                systemSource.connect(merger, 0, 1);
+            }
+
+            // Connect merger to processor
+            merger.connect(processor);
+            processor.connect(audioContext.destination);
+
+            processor.onaudioprocess = (e) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    // Mix channels if we have both, otherwise just use what we have
+                    const channel0 = e.inputBuffer.getChannelData(0);
+                    const channel1 = e.inputBuffer.numberOfChannels > 1
+                        ? e.inputBuffer.getChannelData(1)
+                        : channel0;
+
+                    // Simple mix: average the two channels
+                    const mixed = new Float32Array(channel0.length);
+                    for (let i = 0; i < channel0.length; i++) {
+                        mixed[i] = (channel0[i] + channel1[i]) / 2;
+                    }
+
+                    const pcmData = floatTo16BitPCM(mixed);
+                    ws.send(pcmData);
+                }
+            };
+
+            setStatus('connected');
+
+        } catch (err) {
+            console.error('Error connecting:', err);
+            setStatus('error');
+        }
+    };
+
+    // Handle skip preference
+    const handleSkip = () => {
+        localStorage.setItem('skipSystemAudio', 'true');
+        setSkipSystemAudio(true);
+        startConnection(false);
+    };
+
+    const handleShareAudio = () => {
+        startConnection(true);
+    };
+
+    // Auto-start if skip preference is set
+    useEffect(() => {
+        if (skipSystemAudio && status === 'init') {
+            startConnection(false);
+        }
+    }, [skipSystemAudio, status]);
 
     const floatTo16BitPCM = (input: Float32Array) => {
         const output = new Int16Array(input.length);
@@ -162,6 +313,82 @@ export default function Overlay() {
 
     const displayStatus = getDisplayStatus();
     const currentPersonality = PERSONALITIES.find(p => p.id === personality);
+
+    // Show initial choice screen
+    if (status === 'init' && !skipSystemAudio) {
+        return (
+            <div
+                style={{
+                    // @ts-ignore - Electron-specific CSS property
+                    WebkitAppRegion: 'drag',
+                    position: 'fixed',
+                    top: '50px',
+                    right: '50px',
+                    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+                    color: '#00ff41',
+                    padding: '24px 32px',
+                    borderRadius: '16px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    fontFamily: 'monospace',
+                    boxShadow: '0 8px 32px rgba(0, 255, 65, 0.3)',
+                    border: '3px solid #00ff41',
+                    textAlign: 'center',
+                    minWidth: '350px',
+                    zIndex: 99999,
+                    cursor: 'move'
+                }}>
+                <div style={{ marginBottom: '16px' }}>🎤 SIDEKICK READY</div>
+                <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '16px' }}>
+                    Capture system audio to hear both sides of calls
+                </div>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); console.log('Share clicked'); handleShareAudio(); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        style={{
+                            // @ts-ignore
+                            WebkitAppRegion: 'no-drag',
+                            background: '#00ff41',
+                            color: '#000',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '8px 16px',
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            fontFamily: 'monospace',
+                            pointerEvents: 'auto',
+                        }}
+                    >
+                        🔊 Share Audio
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); console.log('Skip clicked'); handleSkip(); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        style={{
+                            // @ts-ignore
+                            WebkitAppRegion: 'no-drag',
+                            background: 'transparent',
+                            color: '#00ff41',
+                            border: '1px solid #00ff41',
+                            borderRadius: '6px',
+                            padding: '8px 16px',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            fontFamily: 'monospace',
+                            pointerEvents: 'auto',
+                        }}
+                    >
+                        Skip (Mic Only)
+                    </button>
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.5, marginTop: '12px' }}>
+                    Skip = Linux mic may capture speakers automatically
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div
@@ -203,7 +430,20 @@ export default function Overlay() {
             )}
             {displayStatus === 'connected' && !advice && (
                 <div style={{ color: '#00ff41', fontSize: '18px' }}>
-                    🎤 LISTENING... (Ctrl+Shift+S to pause)
+                    🎤 LISTENING... {hasSystemAudio ? '🔊' : ''}
+                    <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.7 }}>
+                        {hasSystemAudio ? 'Mic + System Audio' : 'Mic Only'} • Ctrl+Shift+S to pause
+                    </div>
+                    {/* Audio Level Meters */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: '20px',
+                        marginTop: '10px'
+                    }}>
+                        <AudioMeter level={micLevel} label="🎤" />
+                        {hasSystemAudio && <AudioMeter level={systemLevel} label="🔊" />}
+                    </div>
                 </div>
             )}
             {advice && isListening && (
