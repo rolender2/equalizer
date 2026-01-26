@@ -1,171 +1,186 @@
-from openai import AsyncOpenAI
-import os
-import json
 import logging
-from .personalities import get_system_prompt, DEFAULT_PERSONALITY, DEFAULT_NEGOTIATION_TYPE
+import time
+import json
+from typing import List, Optional, Dict, Literal
+from core.analysis_engine.tactic_detection import TacticDetector
+from core.analysis_engine.tactic_detection_v2 import TacticDetectorV2
+from core.analysis_engine.schemas import TranscriptSegment, AnalysisResult
+
+USE_TACTIC_DETECTOR_V2 = True
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class Coach:
-    def __init__(self, personality: str = DEFAULT_PERSONALITY, negotiation_type: str = DEFAULT_NEGOTIATION_TYPE):
-        self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.personality = personality
+    def __init__(self, mode: Literal["debrief", "live"] = "debrief", negotiation_type: str = "General", user_speaker_id: int = 0):
+        self.mode = mode
         self.negotiation_type = negotiation_type
-        self.system_prompt = get_system_prompt(personality, negotiation_type)
-        logger.info(f"Coach initialized: {personality} | {negotiation_type}")
+        self.user_speaker_id = user_speaker_id # Default 0 is User
+        self.detector = TacticDetector() # Core engine V1
+        self.detector_v2 = TacticDetectorV2() # Core engine V2
+        self.last_analyzed_index = 0
+        
+        # Buffer for windowed analysis
+        self.audio_buffer: List[TranscriptSegment] = []
+        self.window_size_seconds = 15.0 
+        self.last_analysis_time = time.time()
+        
+        # Dedupe state
+        self._last_emit_key = None
+        self._last_emit_ts = 0.0
+        
+        logger.info(f"Coach initialized | Mode: {mode} | Type: {negotiation_type} | User Speaker ID: {user_speaker_id}")
 
-    def set_personality(self, personality: str):
-        """Change the coaching personality."""
-        self.personality = personality
-        self.system_prompt = get_system_prompt(personality, self.negotiation_type)
-        logger.info(f"Coach personality changed to: {personality}")
+    def set_mode(self, mode: Literal["debrief", "live"]):
+        self.mode = mode
+        logger.info(f"Coach mode set to: {mode}")
 
     def set_negotiation_type(self, negotiation_type: str):
-        """Change the evaluation context."""
         self.negotiation_type = negotiation_type
-        self.system_prompt = get_system_prompt(self.personality, negotiation_type)
-        logger.info(f"Coach negotiation type changed to: {negotiation_type}")
-
-    async def evaluate_necessity(self, transcript: str) -> bool:
-        """
-        Determines if advice is warranted based on the transcript.
-        Now speaker-aware: prioritizes advice when counterparty speaks.
-        """
-        if not transcript or len(transcript.strip()) < 10:
-            return False
-
-        try:
-            response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": """You are a negotiation coach watching a live conversation.
-                    Transcripts are labeled as [USER] (your client) or [COUNTERPARTY] (the other side).
-                    
-                    Say YES if:
-                    - [COUNTERPARTY] makes an offer, demand, or RIGID statement ("non-negotiable", "policy")
-                    - [COUNTERPARTY] pushes back or gives an ultimatum
-                    - [USER] threatens to leave or mentions competitors (BATNA)
-                    - [USER] is about to make a mistake (accepting too fast, revealing info)
-                    - There's a tactical opportunity (silence, counter-offer, anchoring)
-                    
-                    Say NO if:
-                    - It's completely irrelevant small talk
-                    - [USER] is doing well and doesn't need intervention
-                    
-                    Reply ONLY 'YES' or 'NO'."""},
-                    {"role": "user", "content": transcript}
-                ],
-                max_tokens=2,
-                temperature=0
-            )
-            decision = response.choices[0].message.content.strip().upper()
-            logger.info(f"Necessity check result: {decision}")
-            return decision == "YES"
-        except Exception as e:
-            logger.error(f"Error evaluating necessity: {e}")
-            return False
-
-    async def generate_advice(self, transcript: str) -> str:
-        """
-        Generates advice using the JSON Signal architecture.
-        Parses JSON, checks confidence, and returns formatted string for frontend.
-        """
-        try:
-            response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": f"Transcript: {transcript}"}
-                ],
-                max_tokens=150, # Increased for JSON
-                temperature=0.6,
-                response_format={"type": "json_object"} # Enforce JSON
-            )
-            content = response.choices[0].message.content.strip()
-            
-            try:
-                data = json.loads(content)
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse JSON response: {content}")
-                return ""
-
-            # Check confidence gate
-            confidence = data.get("confidence", 0)
-            if confidence < 0.7:
-                logger.info(f"Advice gated (Confidence {confidence} < 0.7)")
-                return ""
-
-            # Check if signal is 'none'
-            if data.get("type") == "none":
-                return ""
-
-            # Format for frontend (Legacy Text Mode for now)
-            # ⚠️ SIGNAL
-            # • Option 1
-            # • Option 2
-            signal_msg = data.get("message", "Signal detected")
-            options = data.get("options", [])
-            
-            formatted_advice = f"⚠️ {signal_msg.upper()}"
-            for opt in options:
-                formatted_advice += f"\n• {opt}"
-
-            logger.info(f"Generated Signal: {formatted_advice}")
-            return formatted_advice
-
-        except Exception as e:
-            logger.error(f"Error generating advice: {e}")
-            return ""
-
-    async def generate_summary(self, transcript: str, outcome: dict) -> dict:
-        """
-        Generate a post-session reflection summary.
-        Returns 3 bullets: Strong Move, Missed Opportunity, Improvement Tip.
-        """
-        result = outcome.get("result", "unknown")
-        notes = outcome.get("notes", "")
+        logger.info(f"Coach type set to: {negotiation_type}")
         
-        prompt = f"""You are analyzing a completed {self.negotiation_type} negotiation.
-Outcome: {result.upper()}
-User Notes: {notes}
+    def set_user_speaker_id(self, user_speaker_id: int):
+        self.user_speaker_id = user_speaker_id
+        logger.info(f"Coach user speaker ID set to: {user_speaker_id}")
 
-Based on the transcript below, provide exactly 3 insights:
-1. STRONG_MOVE: One thing the user did well
-2. MISSED_OPPORTUNITY: One thing they could have done better  
-3. IMPROVEMENT_TIP: One specific actionable tip for next time
-
-Be concise (1 sentence each). Focus on tactical negotiation skills.
-
-Transcript:
-{transcript}
-
-Respond in JSON format:
-{{"strong_move": "...", "missed_opportunity": "...", "improvement_tip": "..."}}"""
-
+    async def process_transcript(self, transcript: str, speaker: str) -> Optional[str]:
+        """
+        Ingests a new transcript line.
+        Returns advice string ONLY if in Live Mode and a signal is detected.
+        Otherwise buffers and returns None.
+        """
+        # 1. Role Mapping
+        mapped_speaker = "COUNTERPARTY"
+        
+        # Check against user_speaker_id cfg
+        # Incoming speaker might be "Speaker 0", "Speaker 1" or int 0, 1
+        # Try to parse
+        spk_id = -1
         try:
-            response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a negotiation coach providing post-session feedback."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=300,
-                temperature=0.7,
-                response_format={"type": "json_object"}
-            )
-            content = response.choices[0].message.content.strip()
+             # If "Speaker 0" -> 0
+             if isinstance(speaker, str) and "Speaker " in speaker:
+                 spk_id = int(speaker.replace("Speaker ", "").strip())
+             elif isinstance(speaker, int) or (isinstance(speaker, str) and speaker.isdigit()):
+                 spk_id = int(speaker)
+        except:
+             pass
+        
+        if spk_id == self.user_speaker_id:
+             mapped_speaker = "USER"
+        
+        # Add to buffer with MAPPED speaker
+        segment = TranscriptSegment(
+            speaker=mapped_speaker,
+            text=transcript,
+            timestamp=time.time()
+        )
+        self.audio_buffer.append(segment)
+        
+        # CHECK MODE: DEBRIEF
+        if self.mode == "debrief":
+            # Strict Rule: No live analysis.
+            return None
+
+        # CHECK MODE: LIVE
+        # Check window conditions
+        current_time = time.time()
+        time_diff = current_time - self.last_analysis_time
+        
+        # Only analyze if sufficient time passed OR buffer is large enough
+        if time_diff >= self.window_size_seconds:
+             return await self._analyze_window()
+        
+        return None
+
+    async def _analyze_window(self) -> Optional[str]:
+        """
+        Internal: Sends current buffer to Core Engine for analysis.
+        """
+        if not self.audio_buffer:
+            return None
             
-            try:
-                data = json.loads(content)
-                logger.info(f"Generated Summary: {data}")
-                return data
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse summary JSON: {content}")
-                return {"error": "Failed to generate summary"}
+        logger.info(f"Analyzing window: {len(self.audio_buffer)} segments")
+        
+        signals = []
+        if USE_TACTIC_DETECTOR_V2:
+            # V2 Logic: Last-Line High Precision
+            # Context = last ~12 lines
+            # New = EXACTLY the last line (most recent)
+            
+            context_segments = self.audio_buffer[-12:] 
+            if not context_segments:
+                return None
                 
-        except Exception as e:
-            logger.error(f"Error generating summary: {e}")
-            return {"error": str(e)}
+            new_segments = [context_segments[-1]]
+            
+            # If the last line is USER, we shouldn't even ask the LLM?
+            # Optimization: If mapped_speaker is USER, return None immediately?
+            # The prompt has a rule "If NEW line is spoken by USER, return NONE".
+            # But skipping the call is cheaper. 
+            # Requirement 3.2 says to add prompt rule. I will do that too.
+            # But let's let the LLM see usage to be safe on context? 
+            # Actually, "Evidence must quote the NEW [COUNTERPARTY] line."
+            # If last line is user, we can skip detection to save cost/latency.
+            # Let's rely on LLM for now as per prompt instructions in task to demonstrate strict prompting, 
+            # but ideally we optimized this. I'll stick to LLM enforcement for robustness (maybe user quote triggers context).
+            
+            logger.info(f"Coach V2 Analysis: 1 new segment (last-line), {len(context_segments)} context")
+            
+            signals = await self.detector_v2.detect_tactics(
+                segments=context_segments, 
+                negotiation_type=self.negotiation_type,
+                new_segments=new_segments
+            )
+        else:
+            # V1 Logic (Legacy)
+            window_segments = self.audio_buffer[-15:] 
+            signals = await self.detector.detect_tactics(window_segments, self.negotiation_type)
+        
+        # Update last analysis time and index
+        self.last_analysis_time = time.time()
+        self.last_analyzed_index = len(self.audio_buffer)
+        
+        if signals:
+            top_signal = max(signals, key=lambda s: s.confidence)
+            
+            # Silence "NONE" category signals (Explicit Gate)
+            if top_signal.category == "NONE":
+                logger.info(f"GATED: NONE (silent)")
+                return None
+            
+            # Dedupe Check
+            dedupe_key = (top_signal.category, top_signal.subtype)
+            curr_time = time.time()
+            
+            if dedupe_key == self._last_emit_key and (curr_time - self._last_emit_ts < 45.0):
+                logger.info(f"DEDUPED: {top_signal.category}({top_signal.subtype}) - Suppressed")
+                return None
+
+            # Update Dedupe State
+            self._last_emit_key = dedupe_key
+            self._last_emit_ts = curr_time
+            
+            # Serialize for frontend consumption
+            advice_payload = {
+                "type": "advice",
+                "content": {
+                    "category": top_signal.category,
+                    "subtype": top_signal.subtype,
+                    "confidence": top_signal.confidence,
+                    "message": top_signal.message,
+                    "options": top_signal.options
+                }
+            }
+            
+            logger.info(f"Live Advice Generated: {top_signal.category} ({top_signal.subtype})")
+            return json.dumps(advice_payload)
+            
+        return None
+
+    async def generate_summary(self, transcript_text: str, outcome: dict) -> dict:
+        """
+        Delegate to Core Engine.
+        """
+        result = await self.detector.generate_summary(transcript_text, outcome)
+        return result.dict()
