@@ -86,3 +86,41 @@ Refine and tighten the MVP to increase user trust, relevance, and learning value
 - Enterprise features / Auth / Billing
 - CRM Integrations
 - Automated model training
+
+---
+
+## Phase 5: Refactor & Privacy Hardening (Current / In-Progress)
+**Goal:** strict separation of concerns, transparency, and "Debrief First" architecture.
+
+### Backend
+- **Core Engine Extraction:** Separate intelligence from UI/State.
+- **Mode Enforcement:**
+  - **Debrief (Default):** No live signals. 100% passive.
+  - **Live (Opt-in):** Explicit user consent required for real-time advice.
+- **Privacy:** Ensure local-first data handling.
+
+### Frontend
+- **Mode Toggle:** Explicit "Enable Live Companion" checkbox.
+- **Visual Status:** Clear indicators of current mode.
+
+---
+
+## Future Roadmap (Post-Refactor)
+
+### Phase 6: Local Inference Engine (Privacy ++)
+**Goal:** Remove dependencies on cloud APIs (OpenAI) for core tactic detection.
+- **Implementation:** Migrate `tactic_detection.py` to use local `Llama-3-8B-Quantized` via `llama.cpp` or `Ollama`.
+- **Benefit:** 100% offline, zero data leakage, lower cost.
+
+### Phase 7: Latency Reduction (Voice-to-Voice)
+**Goal:** Sub-500ms latency for seamless assistance.
+- **Implementation:**
+  - Local STT (Whisper tiny/base).
+  - Local TTS (Coqui or similar) for audio cues (optional).
+  - WebSockets optimization (binary streams).
+
+### Phase 8: Custom Tactic Training
+**Goal:** Allow users to define their own specific signals.
+- **Implementation:**
+  - JSON configuration for "Trigger Phrases" (e.g. "We don't have budget").
+  - User-defined response signals.

@@ -6,6 +6,7 @@ interface OutcomeData {
     result: OutcomeResult;
     confidence: number;
     notes: string;
+    expanded_debrief: boolean;
 }
 
 interface OutcomeModalProps {
@@ -17,6 +18,7 @@ export default function OutcomeModal({ onSave, onClose }: OutcomeModalProps) {
     const [result, setResult] = useState<OutcomeResult | null>(null);
     const [confidence, setConfidence] = useState<number>(3);
     const [notes, setNotes] = useState('');
+    const [expandedDebrief, setExpandedDebrief] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async () => {
@@ -24,7 +26,7 @@ export default function OutcomeModal({ onSave, onClose }: OutcomeModalProps) {
 
         setIsSubmitting(true);
         try {
-            await onSave({ result, confidence, notes });
+            await onSave({ result, confidence, notes, expanded_debrief: expandedDebrief });
         } catch (err) {
             console.error('Failed to save outcome:', err);
         } finally {
@@ -89,10 +91,11 @@ export default function OutcomeModal({ onSave, onClose }: OutcomeModalProps) {
                             borderRadius: '6px',
                             cursor: 'pointer',
                             fontWeight: 'bold',
+                            fontSize: '13px',
                             transition: 'all 0.2s'
                         }}
                     >
-                        WON
+                        Favorable
                     </button>
                     <button
                         onClick={() => setResult('lost')}
@@ -105,11 +108,12 @@ export default function OutcomeModal({ onSave, onClose }: OutcomeModalProps) {
                             borderRadius: '6px',
                             cursor: 'pointer',
                             fontWeight: 'bold',
+                            fontSize: '13px',
                             transition: 'all 0.2s',
                             opacity: result === 'lost' ? 1 : 0.8
                         }}
                     >
-                        LOST
+                        Unfavorable
                     </button>
                     <button
                         onClick={() => setResult('deferred')}
@@ -122,10 +126,11 @@ export default function OutcomeModal({ onSave, onClose }: OutcomeModalProps) {
                             borderRadius: '6px',
                             cursor: 'pointer',
                             fontWeight: 'bold',
+                            fontSize: '13px',
                             transition: 'all 0.2s'
                         }}
                     >
-                        DEFERRED
+                        Pending
                     </button>
                 </div>
 
@@ -144,8 +149,8 @@ export default function OutcomeModal({ onSave, onClose }: OutcomeModalProps) {
                         style={{ width: '100%', cursor: 'pointer', accentColor: '#00ff41' }}
                     />
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.5, marginTop: '4px' }}>
-                        <span>Shaky</span>
-                        <span>Rock Solid</span>
+                        <span>Unsure</span>
+                        <span>Certain</span>
                     </div>
                 </div>
 
@@ -166,6 +171,19 @@ export default function OutcomeModal({ onSave, onClose }: OutcomeModalProps) {
                         fontFamily: 'inherit'
                     }}
                 />
+
+                <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', marginTop: '-10px', marginBottom: '5px' }}>
+                    This is for personal reflection only
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#aaa' }}>
+                    <input
+                        type="checkbox"
+                        checked={expandedDebrief}
+                        onChange={(e) => setExpandedDebrief(e.target.checked)}
+                    />
+                    Include Expanded Debrief (more detail)
+                </label>
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: '10px' }}>

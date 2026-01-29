@@ -46,11 +46,16 @@ function AudioMeter({ level, label }: { level: number; label: string }) {
 }
 
 export default function Overlay() {
-    const [advice, setAdvice] = useState<string | null>(null);
+    const [advice, setAdvice] = useState<any>(null);
     const [status, setStatus] = useState<string>('init'); // 'init' | 'connecting' | 'connected' | 'paused' | 'error'
     const [isListening, setIsListening] = useState(true);
     const [personality, setPersonality] = useState('tactical');
     const [negotiationType, setNegotiationType] = useState('General');
+    const [mode, setMode] = useState<'live' | 'debrief'>('debrief');
+    const [testModeCounterparty, setTestModeCounterparty] = useState(false);
+    const [emitInterim, setEmitInterim] = useState(false);
+    const [endpointingMs, setEndpointingMs] = useState<number>(300);
+    const [windowSizeSeconds, setWindowSizeSeconds] = useState<number>(15);
     const [hasSystemAudio, setHasSystemAudio] = useState(false);
     const [micLevel, setMicLevel] = useState(0);
     const [systemLevel, setSystemLevel] = useState(0);
@@ -205,7 +210,12 @@ export default function Overlay() {
                     ws.send(JSON.stringify({
                         type: 'config',
                         negotiation_type: negotiationType,
-                        personality: personality
+                        mode: mode,
+                        personality: personality,
+                        test_mode_counterparty: testModeCounterparty,
+                        emit_interim: emitInterim,
+                        endpointing_ms: endpointingMs,
+                        window_size_seconds: windowSizeSeconds
                     }));
                     resolve();
                 };
@@ -285,10 +295,23 @@ export default function Overlay() {
                         ? e.inputBuffer.getChannelData(1)
                         : channel0;
 
-                    // Simple mix: average the two channels
-                    const mixed = new Float32Array(channel0.length);
-                    for (let i = 0; i < channel0.length; i++) {
-                        mixed[i] = (channel0[i] + channel1[i]) / 2;
+                    // Mix logic
+                    let mixed: Float32Array;
+
+                    if (withSystemAudio) {
+                        // Keep existing mix behavior if system audio is enabled
+                        mixed = new Float32Array(channel0.length);
+                        for (let i = 0; i < channel0.length; i++) {
+                            mixed[i] = (channel0[i] + channel1[i]) / 2;
+                        }
+                    } else {
+                        // Mic only - use channel 0 directly (no attenuation)
+                        if (e.inputBuffer.numberOfChannels === 1) {
+                            mixed = channel0;
+                        } else {
+                            // If mic gives stereo but we only want one channel or just copy left
+                            mixed = channel0;
+                        }
                     }
 
                     const pcmData = floatTo16BitPCM(mixed);
@@ -343,12 +366,30 @@ export default function Overlay() {
     // 1. Pre-flight: Select Negotiation Type
     if (status === 'init' && !hasSelectedType) {
         return (
-            <PreFlight
-                onStart={({ type }) => {
-                    setNegotiationType(type);
-                    setHasSelectedType(true);
-                }}
-            />
+            <div style={{
+                position: 'fixed',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                pointerEvents: 'auto'
+            }}>
+                <PreFlight
+                    onStart={({ type, mode, test_mode_counterparty, emit_interim, endpointing_ms, window_size_seconds }) => {
+                        setNegotiationType(type);
+                        setMode(mode);
+                        setTestModeCounterparty(test_mode_counterparty);
+                        setEmitInterim(emit_interim);
+                        if (endpointing_ms !== undefined) {
+                            setEndpointingMs(endpointing_ms);
+                        }
+                        if (window_size_seconds !== undefined) {
+                            setWindowSizeSeconds(window_size_seconds);
+                        }
+                        setHasSelectedType(true);
+                    }}
+                />
+            </div>
         );
     }
 
@@ -518,8 +559,13 @@ export default function Overlay() {
                         {hasSystemAudio ? 'Mic + System Audio' : 'Mic Only'} • Ctrl+Shift+S to pause
                     </div>
                     <div style={{ fontSize: '11px', marginTop: '2px', color: '#888' }}>
-                        Scenario: <span style={{ color: '#fff' }}>{negotiationType}</span>
+                        Scenario: <span style={{ color: '#fff' }}>{negotiationType}</span> • Mode: <span style={{ color: mode === 'live' ? '#ff4444' : '#00ff41' }}>{mode.toUpperCase()}</span>
                     </div>
+                    {testModeCounterparty && (
+                        <div style={{ fontSize: '10px', marginTop: '4px', color: '#ff9900' }}>
+                            TEST MODE — All speech treated as COUNTERPARTY
+                        </div>
+                    )}
                     {/* Audio Level Meters */}
                     <div style={{
                         display: 'flex',
@@ -560,18 +606,78 @@ export default function Overlay() {
             )}
             {advice && isListening && (
                 <div style={{ marginTop: '16px', textAlign: 'center' }}>
-                    {advice.split('\n').map((line, i) => (
-                        <div key={i} style={{
-                            fontSize: i === 0 ? '16px' : '14px',
-                            fontWeight: i === 0 ? 'bold' : 'normal',
-                            color: i === 0 ? '#00ff00' : '#cccccc',
-                            marginBottom: i === 0 ? '8px' : '4px',
-                            textAlign: i === 0 ? 'center' : 'left',
-                            paddingLeft: i === 0 ? 0 : '10px'
-                        }}>
-                            {line.toUpperCase()}
-                        </div>
-                    ))}
+                    {(() => {
+                        let data: any = advice;
+                        if (typeof advice === 'string') {
+                            try {
+                                data = JSON.parse(advice);
+                            } catch {
+                                data = { headline: advice };
+                            }
+                        }
+
+                        const category = (data.category || '').toUpperCase();
+                        let displayTitle = data.headline || "Negotiation Pattern Detected";
+
+                        // Fallback: map category to a professional title
+                        if (!data.headline) {
+                            if (category.includes("ANCHOR")) displayTitle = "Pricing Anchor Detected";
+                            else if (category.includes("URGENCY")) displayTitle = "Urgency Tactic Identified";
+                            else if (category.includes("AUTHORITY")) displayTitle = "Authority Deflection Detected";
+                            else if (category.includes("FRAMING")) displayTitle = "Framing Shift Detected";
+                        }
+
+                        const options: string[] = Array.isArray(data.options) ? data.options : [];
+                        const bestQuestion = data.best_question;
+                        const why = data.why;
+
+                        return (
+                            <>
+                                <div style={{
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                    color: '#00ff00',
+                                    marginBottom: '8px',
+                                    textAlign: 'center'
+                                }}>
+                                    ⚠️ {displayTitle}
+                                </div>
+                                {why && (
+                                    <div style={{
+                                        fontSize: '12px',
+                                        color: '#a0a0a0',
+                                        marginBottom: '6px',
+                                        textAlign: 'left',
+                                        paddingLeft: '10px'
+                                    }}>
+                                        {why}
+                                    </div>
+                                )}
+                                {bestQuestion && (
+                                    <div style={{
+                                        fontSize: '13px',
+                                        color: '#ffffff',
+                                        marginBottom: '8px',
+                                        textAlign: 'left',
+                                        paddingLeft: '10px'
+                                    }}>
+                                        Q: {bestQuestion}
+                                    </div>
+                                )}
+                                {options.map((opt, i) => (
+                                    <div key={i} style={{
+                                        fontSize: '14px',
+                                        color: '#cccccc',
+                                        marginBottom: '4px',
+                                        textAlign: 'left',
+                                        paddingLeft: '10px'
+                                    }}>
+                                        • {opt}
+                                    </div>
+                                ))}
+                            </>
+                        );
+                    })()}
                 </div>
             )}
 
@@ -620,7 +726,7 @@ export default function Overlay() {
 
                             // Generate reflection summary
                             try {
-                                const summaryRes = await fetch(`http://127.0.0.1:8000/sessions/${sessionId}/summary`, {
+                                const summaryRes = await fetch(`http://127.0.0.1:8000/sessions/${sessionId}/summary?expanded=${data.expanded_debrief ? 'true' : 'false'}`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' }
                                 });

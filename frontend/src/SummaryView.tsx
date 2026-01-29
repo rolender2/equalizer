@@ -5,6 +5,7 @@ interface SummaryViewProps {
         strong_move?: string;
         missed_opportunity?: string;
         improvement_tip?: string;
+        expanded_insights?: string[];
         error?: string;
     };
     onClose: () => void;
@@ -60,7 +61,7 @@ const SummaryView: React.FC<SummaryViewProps> = ({ summary, onClose }) => {
             pointerEvents: 'auto'
         }}>
             <h2 style={{ color: '#00ff00', margin: '0 0 20px 0', fontSize: '18px' }}>
-                📊 Session Reflection
+                📊 Conversation Debrief
             </h2>
 
             {/* Strong Move */}
@@ -71,7 +72,7 @@ const SummaryView: React.FC<SummaryViewProps> = ({ summary, onClose }) => {
                     marginBottom: '4px',
                     fontSize: '14px'
                 }}>
-                    ✅ Strong Move
+                    ✅ Effective Move
                 </div>
                 <div style={{
                     fontSize: '13px',
@@ -91,7 +92,7 @@ const SummaryView: React.FC<SummaryViewProps> = ({ summary, onClose }) => {
                     marginBottom: '4px',
                     fontSize: '14px'
                 }}>
-                    ⚠️ Missed Opportunity
+                    ⚠️ Leverage Opportunity Missed
                 </div>
                 <div style={{
                     fontSize: '13px',
@@ -111,7 +112,7 @@ const SummaryView: React.FC<SummaryViewProps> = ({ summary, onClose }) => {
                     marginBottom: '4px',
                     fontSize: '14px'
                 }}>
-                    💡 Tip for Next Time
+                    💡 Adjustment for Next Call
                 </div>
                 <div style={{
                     fontSize: '13px',
@@ -122,6 +123,24 @@ const SummaryView: React.FC<SummaryViewProps> = ({ summary, onClose }) => {
                     {summary.improvement_tip || 'No data'}
                 </div>
             </div>
+
+            {summary.expanded_insights && summary.expanded_insights.length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                        color: '#bbb',
+                        fontWeight: 'bold',
+                        marginBottom: '6px',
+                        fontSize: '12px'
+                    }}>
+                        🧠 Expanded Debrief
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#eee', lineHeight: '1.4' }}>
+                        {summary.expanded_insights.map((item, idx) => (
+                            <li key={idx}>{item}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
 
             <button
                 onClick={onClose}

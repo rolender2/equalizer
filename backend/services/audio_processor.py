@@ -14,16 +14,27 @@ class AudioProcessor:
     Handles streaming audio to Deepgram using raw WebSockets.
     Now includes speaker diarization support.
     """
-    def __init__(self, transcript_callback):
+    def __init__(self, transcript_callback, emit_interim: bool = False, endpointing_ms: int = 300):
         """
         Args:
             transcript_callback: Function that takes (transcript: str, speaker: int)
         """
         self.transcript_callback = transcript_callback
         self.api_key = os.getenv("DEEPGRAM_API_KEY")
+        # When enabled, emit intermediate finals to the callback for near-real-time analysis.
+        self.emit_interim = emit_interim or (os.getenv("DG_EMIT_INTERIM", "").lower() in ("1", "true", "yes"))
+        self.endpointing_ms = int(endpointing_ms)
         self.ws = None
         self._receive_task = None
         self._connected = False
+
+    def set_emit_interim(self, enabled: bool):
+        self.emit_interim = bool(enabled)
+        logger.info(f"AudioProcessor emit_interim set to: {self.emit_interim}")
+
+    def set_endpointing(self, endpointing_ms: int):
+        self.endpointing_ms = int(endpointing_ms)
+        logger.info(f"AudioProcessor endpointing set to: {self.endpointing_ms}ms")
 
     async def start(self):
         """Initializes the Deepgram WebSocket Connection with diarization."""
@@ -37,7 +48,8 @@ class AudioProcessor:
                 f"&encoding=linear16"
                 f"&channels=1"
                 f"&sample_rate=16000"
-                f"&endpointing=300"
+                f"&endpointing={self.endpointing_ms}"
+                f"&interim_results=true"
                 f"&diarize=true"  # Enable speaker diarization
             )
 
@@ -87,7 +99,10 @@ class AudioProcessor:
                             if self.transcript_callback:
                                 self.transcript_callback(transcript, speaker)
                         elif transcript and is_final:
-                            logger.debug(f"[Speaker {speaker}] Intermediate Final: {transcript}")
+                            # Emit intermediate finals for near-continuous terminal feedback
+                            logger.info(f"[Speaker {speaker}] Intermediate Final: {transcript}")
+                            if self.emit_interim and self.transcript_callback:
+                                self.transcript_callback(transcript, speaker)
                             
         except ConnectionClosed:
             logger.info("Deepgram connection closed")
@@ -113,4 +128,3 @@ class AudioProcessor:
         if self.ws:
             await self.ws.close()
             logger.info("Deepgram Connection Closed")
-

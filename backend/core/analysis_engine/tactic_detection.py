@@ -2,6 +2,7 @@ from openai import AsyncOpenAI
 import os
 import json
 import logging
+import re
 from typing import List, Optional
 from .schemas import TranscriptSegment, TacticSignal, AnalysisResult, ImprovementSummary
 
@@ -34,6 +35,11 @@ Do NOT advise the user. Do NOT script the user. Only DETECT.
 
 PRIORITY RULES:
 1. FOCUS ON THE NEWEST SEGMENT. If no new tactic appears there, return category: "NONE".
+2. NUMERIC ANCHOR RULE:
+   - If the NEWEST segment contains a concrete numeric price/currency amount (e.g., "$50,000", "50k", "USD 50000"),
+     classify as ANCHORING with subtype numeric_anchor, unless it is clearly non-negotiation context
+     (e.g., "Last year I paid $50,000 for a car").
+   - If the NEWEST segment contains a single numeric amount and the speaker is COUNTERPARTY, treat it as an anchor.
 2. AUTHORITY VS URGENCY:
    - "I don't have authority", "check with manager", "company policy", "no flexibility" -> AUTHORITY (subtype: manager_deferral, policy_shield).
    - ONLY classify as URGENCY if explicit time/scarcity cues exist ("today", "this week", "only one left").
@@ -62,7 +68,7 @@ Output Schema (JSON):
 {{
   "signals": [
     {{
-      "category": "ANCHORING | URGENCY | AUTHORITY | FRAMING | NONE",
+      "category": "ANCHORING | URGENCY | AUTHORITY | FRAMING | COMMITMENT_TRAP | CONCESSION | BUNDLING | PAYMENT_DEFLECTION | LOSS_AVERSION | SOCIAL_PROOF | NONE",
       "subtype": "string (from list above)",
       "confidence": float (0.0-1.0),
       "evidence": "Quote from transcript causing detection",
@@ -112,13 +118,39 @@ Output Schema (JSON):
                     except Exception as e:
                         logger.warning(f"Skipping invalid signal item: {item} | Error: {e}")
             
+            # Override: if newest line contains a price amount, emit numeric anchor unless excluded.
+            newest_text = segments[-1].text
+            if _is_price_anchor_candidate(newest_text):
+                if not signals:
+                    return [TacticSignal(
+                        category="ANCHORING",
+                        subtype="numeric_anchor",
+                        confidence=1.0,
+                        evidence=newest_text,
+                        timestamp=segments[-1].timestamp,
+                        options=[],
+                        message="Counterparty stated a concrete price point."
+                    )]
+
+                top = signals[0]
+                if top.category == "NONE" or not (top.category == "ANCHORING" and top.subtype in ("numeric_anchor", "range_anchor")):
+                    return [TacticSignal(
+                        category="ANCHORING",
+                        subtype="numeric_anchor",
+                        confidence=1.0,
+                        evidence=newest_text,
+                        timestamp=segments[-1].timestamp,
+                        options=[],
+                        message="Counterparty stated a concrete price point."
+                    )]
+
             return signals
 
         except Exception as e:
             logger.error(f"Error in detect_tactics: {e}")
             return []
 
-    async def generate_summary(self, full_transcript: str, outcome: dict) -> ImprovementSummary:
+    async def generate_summary(self, full_transcript: str, outcome: dict, expanded: bool = False) -> ImprovementSummary:
         """
         Generates the post-session debrief summary.
         """
@@ -132,7 +164,8 @@ Return JSON:
 {{
   "strong_move": "Single sentence on what went well",
   "missed_opportunity": "Single sentence on what was missed",
-  "improvement_tip": "Single actionable tip"
+  "improvement_tip": "Single actionable tip"{"," if expanded else ""}
+  {"" if not expanded else '"expanded_insights": ["3-5 concise bullets on tactics, leverage shifts, and missed opportunities"]'}
 }}"""
 
         try:
@@ -150,7 +183,8 @@ Return JSON:
             return ImprovementSummary(
                 strong_move=data.get("strong_move", "N/A"),
                 missed_opportunity=data.get("missed_opportunity", "N/A"),
-                improvement_tip=data.get("improvement_tip", "N/A")
+                improvement_tip=data.get("improvement_tip", "N/A"),
+                expanded_insights=data.get("expanded_insights") if expanded else None
             )
         except Exception as e:
             logger.error(f"Summary generation error: {e}")
@@ -159,3 +193,22 @@ Return JSON:
                 missed_opportunity="Analysis failed",
                 improvement_tip=str(e)
             )
+
+
+_AMOUNT_PATTERNS = [
+    re.compile(r"\$\s?\d[\d,]*", re.IGNORECASE),
+    re.compile(r"\bUSD\s?\d[\d,]*\b", re.IGNORECASE),
+    re.compile(r"\b\d+(?:\.\d+)?\s?k\b", re.IGNORECASE),
+]
+
+_NON_NEGOTIATION_HINTS = [
+    "last year",
+    "i paid",
+]
+
+
+def _is_price_anchor_candidate(text: str) -> bool:
+    lowered = text.lower()
+    if any(hint in lowered for hint in _NON_NEGOTIATION_HINTS):
+        return False
+    return any(p.search(text) for p in _AMOUNT_PATTERNS)

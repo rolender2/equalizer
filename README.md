@@ -9,13 +9,13 @@
 │   Electron  │ ──────────────▶│   FastAPI   │
 │   Overlay   │    WebSocket   │   Backend   │
 └─────────────┘                └──────┬──────┘
-       ▲                              │
-       │ Advice                       ▼
-       │                       ┌─────────────┐
-       └───────────────────────│  Deepgram   │
-                               │  Nova-2 STT │
+                                      │
+                                      ▼
+                               ┌─────────────┐
+                               │ Core Engine │◀─── New!
+                               │  (Logic)    │
                                └──────┬──────┘
-                                      │ Transcript
+                                      │
                                       ▼
                                ┌─────────────┐
                                │  Coach AI   │
@@ -26,6 +26,8 @@
 **Tech Stack:**
 - **Frontend**: Electron + React (TypeScript) — Draggable floating HUD
 - **Backend**: Python FastAPI — WebSocket server + AI pipeline
+- **Core Engine**: Pure Python logic for tactic detection & signal gating
+- **Role Mapping**: Strict `User` (Speaker 0) vs `Counterparty` (Speaker 1+) enforcement, with optional Test Mode override for demos
 - **AI**: Deepgram Nova-2 (Streaming STT) + OpenAI GPT-4o-mini (Coach)
 
 ---
@@ -87,73 +89,67 @@ cd frontend && npm run electron:dev
 
 ## 🎮 Usage Guide
 
-1. **Drag the overlay** to position it near your Zoom/Teams window
-2. **Speak into your microphone** — The app listens in real-time
-3. **Watch for advice** — A green card appears when tactical advice is warranted
-   - Example: *"Don't accept yet. Ask for their best price first."*
-4. **Auto-dismiss** — Advice vanishes after 8 seconds
+### Product Modes (Presets)
+The system now uses three presets in the **Pre-Flight** screen:
 
-### Negotiation Presets
-Before starting a session, select your scenario type from the **Pre-Flight** screen:
+1. **Practice Mode**
+   - Live analysis + Test Mode + Continuous updates.
+   - Fast, permissive detection for demos/YouTube.
+2. **Live Call**
+   - Live analysis with normal gating (counterparty only).
+   - Cleaner signals, fewer false positives.
+3. **Post Negotiation Analysis Only**
+   - No live advice.
+   - Post-call summary only.
 
-| Preset | Use Case |
-|--------|----------|
-| **General** | Default balanced coaching |
-| **Salary** | Job offer negotiations |
-| **Vendor** | Supplier contract discussions |
-| **Renewal** | Contract renewal pushback |
-| **Scope** | Project scope negotiations |
+### Standard Flow
+1. **Select Scenario:** Vendor, Scope, Renewal, General.
+2. **Select Mode:** Practice Mode / Live Call / Post Negotiation Analysis Only.
+3. **Initialize:** Overlay appears in "LISTENING" state.
+4. **Negotiate:** 
+   - In **Debrief**, just talk.
+   - In **Live**, watch for "⚠️ SIGNAL" alerts.
+5. **End Session:** Click Stop -> Save Outcome (Won/Lost).
+6. **Learn:** Review the AI-generated "Reflection Summary" and optional Expanded Debrief.
 
-### Coach Personalities
-Click the personality button below the status to cycle through coaching styles:
+### Supported Tactics (Live Mode)
+- **Anchoring:** numeric_anchor, range_anchor, comparison_anchor
+- **Urgency:** deadline, scarcity
+- **Authority:** manager_deferral, policy_shield
+- **Framing:** roi_reframe, monthly_breakdown, minimization
+- **Commitment Traps:** conditional_commitment, reciprocity_gate
+- **Concessions:** staged_concession, tradeoff_offer
+- **Bundling:** add_on_bundle, take_it_or_leave_it_package
+- **Payment Deflection:** monthly_focus, affordability_frame
+- **Loss Aversion:** fear_of_missing_out, loss_warning
+- **Social Proof:** popularity_claim, herd_reference
 
-| Personality | Icon | Style |
-|-------------|------|-------|
-| **Tactical** | ⚔️ | Direct, commanding, military-style advice |
-| **Diplomatic** | 🤝 | Gentle, relationship-focused suggestions |
-| **Socratic** | 🤔 | Thought-provoking questions |
-| **Power** | 💪 | Bold, aggressive demands |
+### Signal Quality Safeguards
+- **Ad filter:** skips ad-like segments (e.g., “sponsored”, “promo code”).
+- **FRAMING threshold:** FRAMING signals require higher confidence to reduce false positives.
 
 ### Keyboard Shortcuts
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+Shift+S` | Toggle pause/resume listening |
 
-### Status Indicators
-| Status | Meaning |
-|--------|---------|
-| 🎤 LISTENING... | Connected and monitoring audio |
-| ⏳ CONNECTING... | Attempting to connect to backend |
-| ⚠️ CONNECTION ERROR | Backend not running or unreachable |
-| ⏸️ PAUSED | Listening paused (press Ctrl+Shift+S to resume) |
-| 🎤 + 🔊 | Mic + System Audio both captured |
-| 🎤 Mic Only | Only microphone audio (system audio declined) |
-| 🗣️ Diarization | Speaker 0 (You) vs. Speaker 1+ (Counterparty) identification |
-
-### Session Recording
-All sessions are automatically recorded to:
-```
-~/Documents/Sidekick/sessions/YYYY-MM-DD_HHMMSS.json
-```
-
-Each session file contains:
-- Timestamped transcripts
-- Advice given with personality used
-- Session summary stats
-- **Outcome tagging** (Won/Lost/Deferred)
-- **AI Reflection** (3 bullets: Strong Move, Missed Opportunity, Improvement Tip)
-
 ---
 
-## 🛠️ Troubleshooting
+## ✅ Verification & Testing
 
-| Issue | Solution |
-|-------|----------|
-| **Connection Error** | Ensure backend is running on port 8000 |
-| **No advice appearing** | Check backend logs — if "Advice NOT warranted", AI is choosing silence (working as designed) |
-| **No transcripts in logs** | Check microphone permissions in OS settings |
-| **Overlay not on top** | Avoid full-screen apps; use windowed mode for presentations |
-| **Electron sandbox error (Linux)** | Run with `--no-sandbox` flag (already configured) |
+### Live Simulation (Backend Only)
+Test the analysis engine without the frontend or microphone:
+```bash
+cd backend
+python scripts/simulate_live.py
+```
+*This simulates a conversation with "User" and "Counterparty" lines to trigger tactics.*
+
+### Unit Tests
+Run the test suite (including new Role Mapping tests):
+```bash
+PYTHONPATH=/home/robert/Coding/equalizer/backend pytest backend/tests
+```
 
 ---
 
@@ -162,38 +158,27 @@ Each session file contains:
 ```
 equalizer/
 ├── backend/
+│   ├── core/                # pure logic (no web/db dependencies)
+│   │   └── analysis_engine/ # tactic detection & schemas
 │   ├── main.py              # FastAPI WebSocket server
 │   ├── services/
-│   │   ├── audio_processor.py  # Deepgram WebSocket client
-│   │   ├── coach.py            # GPT-4o-mini advisor logic
-│   │   └── personalities.py    # Coach personality definitions
-│   ├── .env                 # API keys (not in git)
+│   │   ├── audio_processor.py
+│   │   ├── coach.py         # Orchestrator (delegates to Core)
+│   │   └── session_recorder.py
 │   └── requirements.txt
 ├── frontend/
-│   ├── electron/
-│   │   └── main.js          # Electron window config
 │   ├── src/
-│   │   ├── App.tsx          # React app root
-│   │   └── Overlay.tsx      # Main overlay component
-│   └── package.json
-├── agents.md                # AI personality definitions
-└── README.md
+│   │   ├── PreFlight.tsx    # Mode & Scenario selection
+│   │   ├── Overlay.tsx      # Main HUD
+│   │   └── ...
+├── sessions/                # Local JSON recordings
+├── agents.md                # Behavioral instructions
+└── uat.md                   # User Acceptance Tests
 ```
 
 ---
 
-## 🔮 Future Enhancements
-
-See [docs/POST_MVP_ROADMAP.md](docs/POST_MVP_ROADMAP.md) for detailed implementation plans.
-
-**Completed:**
-- [x] Keyboard shortcut to toggle listening (Ctrl+Shift+S)
-- [x] Persist overlay position across sessions
-- [x] Custom Coach personalities (Tactical, Diplomatic, Socratic, Power)
-- [x] System audio capture (hear both sides of call)
-- [x] Session recording to local JSON files
-- [x] Speaker diarization (identify who said what)
-- [x] Negotiation Presets (Salary, Vendor, Renewal, Scope, General)
-- [x] Outcome Tagging (Won/Lost/Deferred with confidence & notes)
-- [x] Signal & Risk Alerts (structured advice with strategic options)
-- [x] Post-Session Reflection (AI-generated 3-bullet summary)
+## 🔮 Roadmap
+See [docs/POST_MVP_ROADMAP.md](docs/POST_MVP_ROADMAP.md) for details on:
+- **Phase 6:** Local Inference (Llama 3)
+- **Phase 7:** Latency Reduction

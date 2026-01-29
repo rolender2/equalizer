@@ -32,3 +32,8 @@ body, html {
 .advice-card {
   pointer-events: auto;
 }
+
+/* Hide scrollbars on the preflight card while allowing overflow if needed */
+.preflight-card::-webkit-scrollbar {
+  display: none;
+}

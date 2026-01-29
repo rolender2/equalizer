@@ -26,6 +26,9 @@ class Coach:
         self.window_size_seconds = 15.0 
         self.last_analysis_time = time.time()
         
+        # Test Mode Logic
+        self.test_mode_counterparty = False
+        
         # Dedupe state
         self._last_emit_key = None
         self._last_emit_ts = 0.0
@@ -44,38 +47,82 @@ class Coach:
         self.user_speaker_id = user_speaker_id
         logger.info(f"Coach user speaker ID set to: {user_speaker_id}")
 
-    async def process_transcript(self, transcript: str, speaker: str) -> Optional[str]:
+    def set_test_mode_counterparty(self, val: bool):
+        self.test_mode_counterparty = bool(val)
+        logger.info(f"Coach test_mode_counterparty set to: {self.test_mode_counterparty}")
+
+    def _speaker_id_from_segment(self, seg_speaker) -> int:
+        """
+        Normalized speaker identity to int if possible.
+        Supports int speaker_id, 'Speaker N', 'N'.
+        Returns -1 if unknown/unparseable.
+        Returns -2 if already mapped to USER/COUNTERPARTY (legacy safety).
+        """
+        if isinstance(seg_speaker, int):
+            return seg_speaker
+            
+        if isinstance(seg_speaker, str):
+            if seg_speaker in ("USER", "COUNTERPARTY"):
+                return -2
+            
+            # handle "Speaker 0" / "speaker 0"
+            import re
+            m = re.search(r"(\d+)", seg_speaker)
+            if m:
+                return int(m.group(1))
+                
+        return -1
+
+    def _role_label(self, speaker_input) -> str:
+        """
+        Map speaker input to USER or COUNTERPARTY based on user_speaker_id.
+        """
+        # 1. Check if already mapped (safety)
+        if isinstance(speaker_input, str) and speaker_input in ("USER", "COUNTERPARTY"):
+            return speaker_input
+            
+        # 2. Extract ID
+        spk_id = self._speaker_id_from_segment(speaker_input)
+        
+        # 3. Map
+        if spk_id == -2: # Already mapped signal
+            return speaker_input # Should have contributed to spk_id extraction check above, but for safety
+            
+        if spk_id == self.user_speaker_id:
+            return "USER"
+            
+        # Default all others to COUNTERPARTY
+        return "COUNTERPARTY"
+
+    async def process_transcript(self, transcript: str, speaker: str | int) -> Optional[str]:
         """
         Ingests a new transcript line.
         Returns advice string ONLY if in Live Mode and a signal is detected.
         Otherwise buffers and returns None.
         """
-        # 1. Role Mapping
-        mapped_speaker = "COUNTERPARTY"
-        
-        # Check against user_speaker_id cfg
-        # Incoming speaker might be "Speaker 0", "Speaker 1" or int 0, 1
-        # Try to parse
-        spk_id = -1
-        try:
-             # If "Speaker 0" -> 0
-             if isinstance(speaker, str) and "Speaker " in speaker:
-                 spk_id = int(speaker.replace("Speaker ", "").strip())
-             elif isinstance(speaker, int) or (isinstance(speaker, str) and speaker.isdigit()):
-                 spk_id = int(speaker)
-        except:
-             pass
-        
-        if spk_id == self.user_speaker_id:
-             mapped_speaker = "USER"
+        # Map Role properly
+        mapped_role = self._role_label(speaker)
+        if self.test_mode_counterparty:
+            mapped_role = "COUNTERPARTY"
         
         # Add to buffer with MAPPED speaker
         segment = TranscriptSegment(
-            speaker=mapped_speaker,
+            speaker=mapped_role,
             text=transcript,
             timestamp=time.time()
         )
         self.audio_buffer.append(segment)
+        
+        # Log for verification
+        # Only log if it's a new interaction type or periodically could be noisy, 
+        # but User requested explicit log confirming role.
+        # We'll log the LAST segment's role behavior in _analyze_window mostly, 
+        # but let's log here for immediate feedback as requested ("NEW role=...").
+        # To avoid spam, maybe debug level, but request said "Add an explicit log...".
+        # Let's log info.
+        tm_str = " (TEST_MODE)" if self.test_mode_counterparty else ""
+        logger.info(f"NEW role={mapped_role}{tm_str} spk_input={speaker} text=\"{transcript[:30]}...\"")
+
         
         # CHECK MODE: DEBRIEF
         if self.mode == "debrief":
@@ -87,8 +134,8 @@ class Coach:
         current_time = time.time()
         time_diff = current_time - self.last_analysis_time
         
-        # Only analyze if sufficient time passed OR buffer is large enough
-        if time_diff >= self.window_size_seconds:
+        # Only analyze if sufficient time passed OR this is the first eligible segment
+        if time_diff >= self.window_size_seconds or self.last_analyzed_index == 0:
              return await self._analyze_window()
         
         return None
@@ -101,6 +148,11 @@ class Coach:
             return None
             
         logger.info(f"Analyzing window: {len(self.audio_buffer)} segments")
+
+        newest_segment = self.audio_buffer[-1]
+        if not self.test_mode_counterparty and newest_segment.speaker != "COUNTERPARTY":
+            logger.info("GATED: newest segment is USER (no analysis)")
+            return None
         
         signals = []
         if USE_TACTIC_DETECTOR_V2:
@@ -161,26 +213,27 @@ class Coach:
             self._last_emit_key = dedupe_key
             self._last_emit_ts = curr_time
             
-            # Serialize for frontend consumption
+            # Serialize for frontend consumption (v3 payload)
             advice_payload = {
-                "type": "advice",
-                "content": {
-                    "category": top_signal.category,
-                    "subtype": top_signal.subtype,
-                    "confidence": top_signal.confidence,
-                    "message": top_signal.message,
-                    "options": top_signal.options
-                }
+                "category": top_signal.category,
+                "subtype": top_signal.subtype,
+                "confidence": top_signal.confidence,
+                "headline": top_signal.headline,
+                "why": top_signal.why,
+                "best_question": top_signal.best_question,
+                "options": top_signal.options,
+                "evidence": top_signal.evidence,
+                "timestamp": top_signal.timestamp
             }
             
             logger.info(f"Live Advice Generated: {top_signal.category} ({top_signal.subtype})")
-            return json.dumps(advice_payload)
+            return advice_payload
             
         return None
 
-    async def generate_summary(self, transcript_text: str, outcome: dict) -> dict:
+    async def generate_summary(self, transcript_text: str, outcome: dict, expanded: bool = False) -> dict:
         """
         Delegate to Core Engine.
         """
-        result = await self.detector.generate_summary(transcript_text, outcome)
+        result = await self.detector.generate_summary(transcript_text, outcome, expanded=expanded)
         return result.dict()

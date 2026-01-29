@@ -71,7 +71,7 @@ async def save_session_outcome(session_id: str, outcome: OutcomeRequest):
 
 
 @app.post("/sessions/{session_id}/summary")
-async def generate_session_summary(session_id: str):
+async def generate_session_summary(session_id: str, expanded: bool = False):
     """Generate a post-session reflection summary."""
     from pathlib import Path
     import json as json_module
@@ -99,7 +99,7 @@ async def generate_session_summary(session_id: str):
         # Create a Coach instance for summary generation
         # Mode doesn't strictly matter here as we call generate_summary directly
         coach = Coach(negotiation_type=negotiation_type, mode="debrief")
-        summary = await coach.generate_summary(transcript_text, outcome)
+        summary = await coach.generate_summary(transcript_text, outcome, expanded=expanded)
         
         # Save summary to session file
         session_data["reflection"] = summary
@@ -130,16 +130,16 @@ async def websocket_endpoint(websocket: WebSocket):
     
     # Callback to run when Deepgram detects a sentence/pause
     def on_transcript(transcript: str, speaker: int = 0):
-        # Map speaker to label
-        speaker_label = "USER" if speaker == 0 else "COUNTERPARTY"
+        # Pass raw speaker ID to recorder and coach
+        # They will handle mapping based on configuration
         
         # Record the transcript with speaker
-        recorder.add_transcript(transcript, speaker=speaker_label)
+        recorder.add_transcript(transcript, speaker=speaker)
         
         # Schedule async coach processing
         # We process every transcript; the coach internally handles buffering and debrief logic.
         asyncio.run_coroutine_threadsafe(
-            process_transcript_and_advise(transcript, speaker_label, websocket, coach, recorder), 
+            process_transcript_and_advise(transcript, speaker, websocket, coach, recorder), 
             loop
         )
 
@@ -173,10 +173,20 @@ async def websocket_endpoint(websocket: WebSocket):
                         new_type = data.get("negotiation_type", DEFAULT_NEGOTIATION_TYPE)
                         mode = data.get("mode", "debrief") # Default to debrief if missing
                         user_id = data.get("user_speaker_id", 0)
+                        emit_interim = data.get("emit_interim", False)
+                        endpointing_ms = data.get("endpointing_ms")
+                        window_override = data.get("window_size_seconds")
+                        test_mode = data.get("test_mode_counterparty", False)
                         
                         coach.set_negotiation_type(new_type)
                         coach.set_mode(mode)
                         coach.set_user_speaker_id(user_id)
+                        processor.set_emit_interim(emit_interim)
+                        if endpointing_ms is not None:
+                            processor.set_endpointing(endpointing_ms)
+                        if window_override is not None:
+                            coach.window_size_seconds = float(window_override)
+                        coach.set_test_mode_counterparty(test_mode)
                         
                         # Update recorder context
                         recorder.negotiation_type = new_type
@@ -215,7 +225,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 async def process_transcript_and_advise(
     transcript: str,
-    speaker: str,
+    speaker: int | str,
     websocket: WebSocket, 
     coach: Coach,
     recorder: SessionRecorder

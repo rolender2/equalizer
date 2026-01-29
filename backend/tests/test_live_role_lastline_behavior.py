@@ -97,8 +97,7 @@ async def test_role_gating_behavior(coach):
     result = await coach.process_transcript("Valid today only.", "Speaker 1")
     
     assert result is not None
-    data = json.loads(result)
-    assert data["content"]["category"] == "URGENCY"
+    assert result["category"] == "URGENCY"
 
 @pytest.mark.asyncio
 async def test_dedupe_cooldown(coach):

@@ -2,6 +2,7 @@ from openai import AsyncOpenAI
 import os
 import json
 import logging
+import re
 from typing import List, Optional
 from .schemas import TranscriptSegment, TacticSignal, AnalysisResult, ImprovementSummary
 
@@ -52,6 +53,11 @@ class TacticDetectorV2:
 
         for seg in target_segments:
             new_text += f"[{seg.speaker}]: {seg.text}\n"
+
+        newest_text = target_segments[-1].text if target_segments else ""
+        if _is_ad_segment(newest_text):
+            logger.info("AD FILTER: skipping analysis for ad-like segment")
+            return []
             
         system_prompt = f"""You are a negotiation intelligence engine (Core Mode).
 Context: {negotiation_type} negotiation.
@@ -71,6 +77,10 @@ Forbidden option intent examples: 'emphasize the benefits of acting quickly', 'h
 
 PRIORITY RULES:
 1. FOCUS ON THE NEW SECTONS. If no new tactic appears there, return category: "NONE".
+1a. COMMITMENT/TRADES OFF VS URGENCY:
+   - If the NEW line is a conditional ask ("If I do X, will you do Y?"), classify as COMMITMENT_TRAP.
+   - If the NEW line offers a concession in exchange for action ("If I waive X, can you sign now?"), classify as CONCESSION (tradeoff_offer).
+   - These take precedence over URGENCY when both appear in the same line.
 2. AUTHORITY VS URGENCY:
    - "I don't have authority", "check with manager", "company policy", "no flexibility" -> AUTHORITY (subtype: manager_deferral, policy_shield).
    - ONLY classify as URGENCY if explicit time/scarcity cues exist ("today", "this week", "only one left").
@@ -86,6 +96,18 @@ Supported Tactics & Subtypes:
   Subtypes: manager_deferral, policy_shield
 - FRAMING: Positioning a loss/gain.
   Subtypes: roi_reframe, monthly_breakdown, minimization
+- COMMITMENT_TRAP: Conditional commitment requests.
+  Subtypes: conditional_commitment, reciprocity_gate
+- CONCESSION: Incremental give-and-take offers.
+  Subtypes: staged_concession, tradeoff_offer
+- BUNDLING: Packaging or adding items/fees.
+  Subtypes: add_on_bundle, take_it_or_leave_it_package
+- PAYMENT_DEFLECTION: Steering to monthly payment instead of total price.
+  Subtypes: monthly_focus, affordability_frame
+- LOSS_AVERSION: Emphasizing loss if no action is taken.
+  Subtypes: fear_of_missing_out, loss_warning
+- SOCIAL_PROOF: Referencing others' choices to persuade.
+  Subtypes: popularity_claim, herd_reference
 - NONE: No tactic detected.
   Subtype: none
 
@@ -105,9 +127,12 @@ Output Schema (JSON):
 {{
   "signals": [
     {{
-      "category": "ANCHORING | URGENCY | AUTHORITY | FRAMING | NONE",
+      "category": "ANCHORING | URGENCY | AUTHORITY | FRAMING | COMMITMENT_TRAP | CONCESSION | BUNDLING | PAYMENT_DEFLECTION | LOSS_AVERSION | SOCIAL_PROOF | NONE",
       "subtype": "string (from list above)",
       "confidence": float (0.0-1.0),
+      "headline": "Short headline (e.g., 'Pricing Anchor Set')",
+      "why": "One-sentence explanation of why it matters",
+      "best_question": "Single best question to ask next",
       "evidence": "Quote from transcript causing detection",
       "options": ["One option is to...", "Consider...", "Another approach could be..."],
       "message": "Short neutral observation (e.g. 'Counterparty cited company policy.')"
@@ -222,7 +247,7 @@ NEW SECTIONS (Classify this):
             try:
                 category = item.get("category", "NONE")
                 confidence = item.get("confidence", 0)
-                
+
                 # Enforce Options Logic
                 raw_options = item.get("options", [])
                 
@@ -255,14 +280,52 @@ NEW SECTIONS (Classify this):
                    category=category,
                    subtype=item.get("subtype", "none"),
                    confidence=confidence,
+                   headline=item.get("headline", item.get("message", "Signal detected")),
+                   why=item.get("why", ""),
+                   best_question=item.get("best_question", ""),
                    evidence=item.get("evidence", ""),
                    timestamp=target_segments[-1].timestamp, 
                    options=valid_options, 
                    message=item.get("message", "Signal Detected")
                 )
+                if signal.category == "FRAMING" and signal.confidence < 0.85:
+                    continue
+                if signal.category == "AUTHORITY" and signal.subtype == "policy_shield" and not signal.options:
+                    signal.options = [
+                        "Consider asking which parts of the policy are flexible versus fixed.",
+                        "One option is to request a review or exception path.",
+                        "Another approach could be to ask who can approve exceptions."
+                    ]
+                if signal.category == "SOCIAL_PROOF" and not signal.options:
+                    signal.options = [
+                        "Consider asking for evidence supporting the popularity claim.",
+                        "One option is to request comparative data against other models.",
+                        "Another approach could be to refocus on your specific requirements."
+                    ]
                 signals.append(signal)
             except Exception as e:
                 logger.warning(f"V2 Skipping invalid signal item: {item} | Error: {e}")
+
+        # Deterministic override for numeric anchors in NEW text (only if LLM returns NONE/empty)
+        newest_text = target_segments[-1].text if target_segments else ""
+        if _is_price_anchor_candidate(newest_text):
+            if not signals or signals[0].category == "NONE":
+                return [TacticSignal(
+                    category="ANCHORING",
+                    subtype="numeric_anchor",
+                    confidence=1.0,
+                    headline="Pricing Anchor Set",
+                    why="First numbers tend to pull the negotiation toward them.",
+                    best_question="What assumptions are baked into that number?",
+                    evidence=newest_text,
+                    timestamp=target_segments[-1].timestamp if target_segments else 0.0,
+                    options=[
+                        "Consider asking for a breakdown of how that figure was calculated.",
+                        "One option is to pause and request external benchmarks before responding.",
+                        "Another approach could be to introduce an alternative reference point."
+                    ],
+                    message="Counterparty stated a concrete price point."
+                )]
 
         return signals
 
@@ -310,3 +373,39 @@ Return JSON:
                 missed_opportunity="Analysis failed",
                 improvement_tip=str(e)
             )
+
+
+_AMOUNT_PATTERNS = [
+    re.compile(r"\$\s?\d[\d,]*", re.IGNORECASE),
+    re.compile(r"\bUSD\s?\d[\d,]*\b", re.IGNORECASE),
+    re.compile(r"\b\d+(?:\.\d+)?\s?k\b", re.IGNORECASE),
+]
+
+_NON_NEGOTIATION_HINTS = [
+    "last year",
+    "i paid",
+]
+
+_AD_HINTS = [
+    r"\bsponsored\b",
+    r"\bthis episode is brought to you\b",
+    r"\bpromo code\b",
+    r"\buse code\b",
+    r"\bsubscribe\b",
+    r"\bad\b",
+    r"\bcommercial\b",
+    r"\bskip this one\b",
+    r"\bvisit\b",
+]
+
+
+def _is_price_anchor_candidate(text: str) -> bool:
+    lowered = text.lower()
+    if any(hint in lowered for hint in _NON_NEGOTIATION_HINTS):
+        return False
+    return any(p.search(text) for p in _AMOUNT_PATTERNS)
+
+
+def _is_ad_segment(text: str) -> bool:
+    lowered = text.lower()
+    return any(re.search(hint, lowered) for hint in _AD_HINTS)

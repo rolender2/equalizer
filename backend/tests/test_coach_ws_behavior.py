@@ -92,9 +92,6 @@ async def test_valid_signal_sends(coach):
     result = await coach.process_transcript("Time is up.", "Counterparty")
     
     assert result is not None
-    import json
-    data = json.loads(result)
-    assert data["type"] == "advice"
-    assert data["content"]["category"] == "URGENCY"
-    assert data["content"]["subtype"] == "deadline"
-    assert len(data["content"]["options"]) > 0
+    assert result["category"] == "URGENCY"
+    assert result["subtype"] == "deadline"
+    assert len(result["options"]) > 0
