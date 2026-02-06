@@ -6,31 +6,31 @@
 ## 🎯 Product Vision
 Sidekick Equalizer is a **real-time desktop negotiation companion** designed to level the playing field for individuals against AI-armed enterprises and professional negotiators.
 
-Unlike passive call recorders, Sidekick provides **active, privacy-first coaching** during high-stakes conversations (Salary, Vendor Contracts, Renewals). It doesn't just record; it **thinks** and **signals** tactical opportunities in real-time.
+Unlike passive call recorders, Sidekick provides **active, privacy-first coaching** during high-stakes conversations (Vendor Contracts, Renewals, Scope Changes). It doesn't just record; it **thinks** and **signals** tactical opportunities in real-time.
 
 ---
 
 ## 🌟 Core MVP Features
 
 ### 1. Real-Time "Co-Pilot" Overlay
-- **Technology:** Electron + React (Transparent, Click-through)
+- **Technology:** Electron + React (Transparent, draggable overlay)
 - **Function:** Floats over Zoom/Teams/Meet.
 - **Privacy:** "Toggle-to-Listen" architecture (not always-on). User explicitly activates it for specific calls.
 - **Visuals:** Minimalist HUD that stays out of the way until it detects a signal.
 
 ### 2. High-Stakes Presets (Context Awareness)
 Before a call, the user selects a specific "Flight Mode" to prime the AI:
-- **💰 Salary:** Tuned to detect lowballs, focus on market value, and suggest non-monetary perks.
 - **🏢 Vendor:** Alerts on "standard inflation" excuses and anchors.
-- **🔄 Renewal:** Spots "policy" bluffs and "lock-in" tactics.
 - **🔭 Scope:** Prevents scope creep and uncompensated asks.
+- **🔄 Renewal:** Spots "policy" bluffs and "lock-in" tactics.
 - **🌐 General:** Balanced coaching for everyday disputes.
+*Note: Salary exists in backend negotiation types but is not currently exposed in the UI preset list.*
 
 ### 3. Tactical Signal Detection (Counter-AI)
 Instead of generic advice, the system identifies specific **Persuasion Tactics** used by the counterparty:
-- **Anchoring:** "They set a high anchor ($50k). Do not accept. Counter with data."
-- **False Urgency:** "Scarcity tactic detected. Verify if the deadline is real."
-- **Good Cop/Bad Cop:** "Authority missing. They are deferring to a 'manager'."
+- **Anchoring:** "High anchor detected ($50k). Consider asking for a rationale or benchmark."
+- **False Urgency:** "Scarcity tactic detected. Consider verifying if the deadline is real."
+- **Authority / Policy Shield:** "They are deferring to a 'manager' or policy."
 - **Output:** Structured "Signal" + 3 Strategic Options (not commands).
 
 ### 4. Outcome Tagging & Learning Loop

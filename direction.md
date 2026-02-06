@@ -104,12 +104,13 @@ The engine must never emit imperative language.
 
 The system must support **two modes**, with clear separation:
 
-#### 🧠 Debrief Mode (DEFAULT)
+#### 🧠 Debrief Mode (PRIMARY)
 
 * Post-call analysis only
 * Full transcript processed at once
 * Produces scorecard, detected tactics, and coaching summary
 * This is the **primary MVP experience**
+* Note: The current UI default preset is Practice (Live). Debrief is still the intended default experience per product intent.
 
 #### ✈️ Live Companion Mode (ADVANCED)
 

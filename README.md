@@ -90,29 +90,36 @@ cd frontend && npm run electron:dev
 ## 🎮 Usage Guide
 
 ### Product Modes (Presets)
-The system now uses three presets in the **Pre-Flight** screen:
+The system uses three presets in the **Pre-Flight** screen:
 
 1. **Practice Mode**
    - Live analysis + Test Mode + Continuous updates.
-   - Fast, permissive detection for demos/YouTube.
+   - Ideal for self-training and demos.
+   - **Note:** Ignores speaker gating (analyzes *all* audio).
 2. **Live Call**
-   - Live analysis with normal gating (counterparty only).
-   - Cleaner signals, fewer false positives.
+   - Live analysis with strict gating.
+   - Only analyzes audio detected as **Counterparty** (Speaker 1+).
+   - **Requirement:** User (Speaker 0) MUST speak first to establish identity.
 3. **Post Negotiation Analysis Only**
-   - No live advice.
-   - Post-call summary only.
+   - No live popups.
+   - Records session silently.
+   - Generates a comprehensive "Report Card" at the end.
 
 ### Standard Flow
 1. **Select Scenario:** Vendor, Scope, Renewal, General.
 2. **Select Mode:** Practice Mode / Live Call / Post Negotiation Analysis Only.
 3. **Initialize:** Overlay appears in "LISTENING" state.
+   > **CRITICAL:** Ensure YOU (the User) speak the first sentence to lock in "Speaker 0" identity.
 4. **Negotiate:** 
-   - In **Debrief**, just talk.
-   - In **Live**, watch for "⚠️ SIGNAL" alerts.
-5. **End Session:** Click Stop -> Save Outcome (Won/Lost).
-6. **Learn:** Review the AI-generated "Reflection Summary" and optional Expanded Debrief.
+   - In **Live/Practice**, watch for "⚠️ SIGNAL" alerts.
+5. **End Session:** Click Stop -> Save Outcome (Won/Lost) -> Check "Include Expanded Debrief".
+6. **Report Card:** Review the detailed breakdown:
+   - **Score:** 0-100 Performance Rating.
+   - **Tactics Faced:** List of specific tactics used against you (e.g., "ANCHORING: Seller asked for $125k").
+   - **Key Moments:** Coaching on your "Strongest Move" and "Missed Opportunities".
 
-### Supported Tactics (Live Mode)
+### Supported Tactics (Detection Engine v2)
+The "Hybrid" engine combines real-time signal detection with LLM synthesis to identify:
 - **Anchoring:** numeric_anchor, range_anchor, comparison_anchor
 - **Urgency:** deadline, scarcity
 - **Authority:** manager_deferral, policy_shield
@@ -124,14 +131,11 @@ The system now uses three presets in the **Pre-Flight** screen:
 - **Loss Aversion:** fear_of_missing_out, loss_warning
 - **Social Proof:** popularity_claim, herd_reference
 
-### Signal Quality Safeguards
-- **Ad filter:** skips ad-like segments (e.g., “sponsored”, “promo code”).
-- **FRAMING threshold:** FRAMING signals require higher confidence to reduce false positives.
-
 ### Keyboard Shortcuts
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+Shift+S` | Toggle pause/resume listening |
+| `Ctrl+Shift+E` | End Session & Generate Report |
 
 ---
 

@@ -38,12 +38,14 @@ Refine and tighten the MVP to increase user trust, relevance, and learning value
 - **Shared Base Prompt Architecture**: All types inherit from base.
 - Type-specific overrides limited to: Risk focus & Option framing.
 - **Vendor Pricing**: Focus on savings, anchoring
-- **Salary**: Focus on market value, benefits
-  - **General** (Balanced)
+- **Scope**: Focus on creep, timeline pressure
+- **Renewal**: Focus on policy pressure, lock-in
+- **General**: Balanced coaching
+- **Salary**: Focus on market value, benefits (backend type; not exposed in current UI)
 
 ### Frontend
 - Add "Pre-Flight" screen before session start
-- Selector for: Vendor, Scope, Salary, Renewal, General
+- Selector for: Vendor, Scope, Renewal, General (Salary is currently hidden in UI)
 
 ---
 
@@ -57,7 +59,7 @@ Refine and tighten the MVP to increase user trust, relevance, and learning value
     "type": "signal", 
     "category": "anchoring", 
     "message": "High anchor detected",
-    "options": ["Ask for rationale", "Use silence", "Counter-anchor"]
+    "options": ["Consider asking for rationale", "One option is to pause briefly", "Another approach could be to counter-anchor"]
   }
   ```
 - **Strict Rule:** No imperative/command language.
@@ -100,8 +102,26 @@ Refine and tighten the MVP to increase user trust, relevance, and learning value
 - **Privacy:** Ensure local-first data handling.
 
 ### Frontend
-- **Mode Toggle:** Explicit "Enable Live Companion" checkbox.
+- **Mode Selection:** Explicit preset choice (Practice / Live Call / Post Negotiation Analysis Only).
 - **Visual Status:** Clear indicators of current mode.
+
+---
+
+## Phase 5.5: Experience Polish (Immediate Next Steps)
+**Goal:** Fix high-friction UX issues discovered during validation (fragile speaker ID, missing history).
+
+### 1. Session History Dashboard
+- **Problem:** Report cards disappear after session end.
+- **Solution:** "Past Sessions" view in Pre-Flight screen to review previous scores and transcripts.
+- **Tech:** Read from local `sessions/*.json` files.
+
+### 2. Speaker Identification Safety Net
+- **Problem:** "User Must Speak First" is fragile; one mistake ruins the analysis.
+- **Solution:** "Swap Speakers" toggle in the Report Card view to re-run analysis with inverted IDs.
+
+### 3. Latency & Overlap Tuning
+- **Problem:** Fast interruptions cause missed tactics (Intermediate results dropped).
+- **Solution:** Tune VAD endpointing and queue logic to capture rapid-fire turns.
 
 ---
 

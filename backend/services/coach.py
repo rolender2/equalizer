@@ -235,5 +235,15 @@ class Coach:
         """
         Delegate to Core Engine.
         """
-        result = await self.detector.generate_summary(transcript_text, outcome, expanded=expanded)
-        return result.dict()
+        if USE_TACTIC_DETECTOR_V2:
+             # Pass the current coach context (e.g. 'Renewal', 'Vendor Pricing') to the engine
+             result = await self.detector_v2.generate_summary(
+                 transcript_text, 
+                 outcome, 
+                 user_speaker_id=self.user_speaker_id,
+                 negotiation_type=self.coach_type
+             )
+             return result.dict()
+        else:
+             result = await self.detector.generate_summary(transcript_text, outcome, expanded=expanded)
+             return result.dict()

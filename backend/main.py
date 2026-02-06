@@ -93,7 +93,7 @@ async def generate_session_summary(session_id: str, expanded: bool = False):
             for t in transcripts
         ])
         
-        outcome = session_data.get("outcome", {})
+        outcome = session_data.get("outcome") or {}
         negotiation_type = session_data.get("negotiation_type", "General")
         
         # Create a Coach instance for summary generation
@@ -103,6 +103,12 @@ async def generate_session_summary(session_id: str, expanded: bool = False):
         
         # Save summary to session file
         session_data["reflection"] = summary
+        session_data["summary_details"] = {
+            "total_transcripts": len(transcripts),
+            "total_advice": len(session_data.get("advice_given", [])),
+            "expanded": bool(expanded),
+            "generated_at": __import__("datetime").datetime.now().isoformat()
+        }
         with open(session_path, 'w') as f:
             json_module.dump(session_data, f, indent=2)
         
@@ -110,6 +116,13 @@ async def generate_session_summary(session_id: str, expanded: bool = False):
         
     except Exception as e:
         logger.error(f"Error generating summary: {e}")
+        # Persist failure for debugging
+        try:
+            session_data["reflection_error"] = str(e)
+            with open(session_path, 'w') as f:
+                json_module.dump(session_data, f, indent=2)
+        except Exception:
+            pass
         return JSONResponse(status_code=500, content={"message": str(e)})
 
 

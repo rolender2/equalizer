@@ -35,10 +35,19 @@ class TacticSignal(BaseModel):
     def tactic(self):
         return self.category
 
+class KeyMoment(BaseModel):
+    quote: str
+    insight: str
+
 class ImprovementSummary(BaseModel):
     strong_move: str
     missed_opportunity: str
     improvement_tip: str
+    negotiation_score: int = Field(description="Score 0-100", default=0)
+    negotiation_summary: Optional[str] = Field(description="Executive Summary", default=None)
+    tactics_faced: List[str] = Field(default_factory=list)
+    key_moments: List[KeyMoment] = Field(default_factory=list)
+    expanded_insights: Optional[List[str]] = Field(default=None)
     expanded_insights: Optional[List[str]] = None
 
 class AnalysisResult(BaseModel):

@@ -10,7 +10,7 @@
 | **Floating overlay** | Electron + React | Seamless user experience |
 | **Keyboard toggle** | Ctrl+Shift+S | Privacy control (enterprise-ready) |
 | **Position persistence** | localStorage | UX polish |
-| **15-word advice limit** | Prompt engineering | Glanceable, actionable |
+| **Structured advice payload** | JSON + option cap (0–3) | Glanceable, actionable |
 
 ### MVP Readiness Score: **7/10**
 The current build is **demo-ready** and could be used in real negotiations today.
@@ -63,7 +63,7 @@ Competitors analyze calls after they happen. Sidekick intervenes in real-time be
 
 | Feature | Effort | Revenue Impact | Description |
 |---------|--------|----------------|-------------|
-| **Coach Personalities** | 1-2 hrs | High | Aggressive, Diplomatic, Socratic modes |
+| **Coach Personalities** | 1-2 hrs | Medium | UI toggle exists; core engine not yet personality-aware |
 | **Session Recording** | 2-3 hrs | Medium | Save transcripts for review |
 | **"Playbook" Templates** | 2 hrs | Medium | Pre-loaded scripts for common scenarios |
 
