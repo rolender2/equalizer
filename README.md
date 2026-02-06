@@ -131,6 +131,13 @@ The "Hybrid" engine combines real-time signal detection with LLM synthesis to id
 - **Loss Aversion:** fear_of_missing_out, loss_warning
 - **Social Proof:** popularity_claim, herd_reference
 
+### Session History Dashboard
+- Access past negotiation reports by clicking the **"History"** button in Pre-Flight or Main Overlay.
+- View stats at a glance: Date, Scenario, Duration, Score, and Outcome.
+- Click any session to replay the detailed "Report Card" analysis.
+
+---
+
 ### Keyboard Shortcuts
 | Shortcut | Action |
 |----------|--------|

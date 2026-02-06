@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import OutcomeModal from './OutcomeModal';
 import PreFlight from './PreFlight';
 import SummaryView from './SummaryView';
+import SessionHistory from './SessionHistory';
 
 // Electron IPC for receiving toggle events
 const ipcRenderer = (window as any).require?.('electron')?.ipcRenderer;
@@ -74,6 +75,9 @@ export default function Overlay() {
     // Phase 4: Reflection Summary
     const [showSummary, setShowSummary] = useState(false);
     const [summaryData, setSummaryData] = useState<any>(null);
+
+    // Phase 3: Session History
+    const [showHistory, setShowHistory] = useState(false);
 
     const socketRef = useRef<WebSocket | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -364,7 +368,7 @@ export default function Overlay() {
     const currentPersonality = PERSONALITIES.find(p => p.id === personality);
 
     // 1. Pre-flight: Select Negotiation Type
-    if (status === 'init' && !hasSelectedType) {
+    if (status === 'init' && !hasSelectedType && !showHistory && !showSummary) {
         return (
             <div style={{
                 position: 'fixed',
@@ -388,13 +392,59 @@ export default function Overlay() {
                         }
                         setHasSelectedType(true);
                     }}
+                    onHistory={() => setShowHistory(true)}
                 />
             </div>
         );
     }
 
-    // 2. Initial Audio Setup (if not auto-skipping)
-    if (status === 'init' && !skipSystemAudio) {
+    // 1.5. History View
+    if (status === 'init' && showHistory) {
+        return (
+            <div style={{
+                position: 'fixed',
+                top: '50px',
+                right: '50px',
+                width: '400px',
+                height: '600px',
+                pointerEvents: 'auto',
+                zIndex: 99999
+            }}>
+                <SessionHistory
+                    onBack={() => setShowHistory(false)}
+                    onSelectSession={async (sid) => {
+                        try {
+                            const res = await fetch(`http://127.0.0.1:8000/sessions/${sid}`);
+                            const data = await res.json();
+                            // Check for reflection OR outcome since older sessions might not have full reflection
+                            if (data.reflection || data.outcome) {
+                                // Pass full data to SummaryView so it has transcripts + session_id
+                                setSummaryData({
+                                    ...data.reflection,
+                                    // ensure these are at root of summaryData for SummaryView
+                                    session_id: data.session_id,
+                                    transcripts: data.transcripts,
+                                    // fallbacks if reflection is partial
+                                    negotiation_score: data.reflection?.negotiation_score ?? 0,
+                                    tactics_faced: data.reflection?.tactics_faced ?? []
+                                });
+                                setShowSummary(true);
+                                setShowHistory(false);
+                            } else {
+                                alert("No detailed analysis found for this session.");
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            alert("Failed to load session details.");
+                        }
+                    }}
+                />
+            </div>
+        );
+    }
+
+    // 2. Initial Audio Setup (if not auto-skipping and not viewing summary)
+    if (status === 'init' && !skipSystemAudio && !showSummary) {
         return (
             <div
                 style={{

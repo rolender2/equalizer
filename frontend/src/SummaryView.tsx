@@ -1,12 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface KeyMoment {
     quote: string;
     insight: string;
 }
 
+interface TranscriptEntry {
+    timestamp: string;
+    text: string;
+    speaker: string;
+}
+
 interface SummaryViewProps {
     summary: {
+        session_id?: string;
         strong_move?: string;
         missed_opportunity?: string;
         improvement_tip?: string;
@@ -14,12 +21,16 @@ interface SummaryViewProps {
         tactics_faced?: string[];
         key_moments?: KeyMoment[];
         expanded_insights?: string[];
+        transcripts?: TranscriptEntry[];
         error?: string;
     };
     onClose: () => void;
 }
 
-const SummaryView: React.FC<SummaryViewProps> = ({ summary, onClose }) => {
+const SummaryView: React.FC<SummaryViewProps> = ({ summary: initialSummary, onClose }) => {
+    // Local state for optimistic updates
+    const [summary, setSummary] = useState(initialSummary);
+
     if (summary.error) {
         return (
             <div style={{
@@ -47,6 +58,32 @@ const SummaryView: React.FC<SummaryViewProps> = ({ summary, onClose }) => {
 
     const score = summary.negotiation_score ?? 0;
     const scoreColor = getScoreColor(score);
+
+    const handleSwapSpeaker = async (index: number) => {
+        if (!summary.session_id) return;
+
+        // Optimistic update
+        const newTranscripts = [...(summary.transcripts || [])];
+        const currentSpeaker = String(newTranscripts[index].speaker || '');
+        const isUser = ["user", "speaker 0", "you", "0"].includes(currentSpeaker.toLowerCase());
+        newTranscripts[index].speaker = isUser ? "counterparty" : "user";
+
+        setSummary({ ...summary, transcripts: newTranscripts });
+
+        try {
+            const res = await fetch(`http://127.0.0.1:8000/sessions/${summary.session_id}/transcript/${index}/swap`, {
+                method: 'POST'
+            });
+            if (!res.ok) {
+                console.error("Failed to swap speaker");
+                // Revert on failure
+                setSummary(initialSummary);
+            }
+        } catch (e) {
+            console.error(e);
+            setSummary(initialSummary);
+        }
+    };
 
     return (
         <div style={{
@@ -120,6 +157,40 @@ const SummaryView: React.FC<SummaryViewProps> = ({ summary, onClose }) => {
                             <li key={i}>{note}</li>
                         ))}
                     </ul>
+                </div>
+            )}
+
+            {summary.transcripts && summary.transcripts.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '14px', textTransform: 'uppercase', color: '#888', marginBottom: '10px', letterSpacing: '1px' }}>Transcript (Beta)</h3>
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Click icon to swap speaker</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {summary.transcripts.map((entry, i) => {
+                            const speakerStr = String(entry.speaker ?? '').toLowerCase();
+                            const isUser = ["user", "speaker 0", "you", "0"].includes(speakerStr);
+                            return (
+                                <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                    <div
+                                        onClick={() => handleSwapSpeaker(i)}
+                                        title="Click to swap speaker"
+                                        style={{
+                                            minWidth: '24px',
+                                            cursor: 'pointer',
+                                            fontSize: '16px',
+                                            opacity: 0.8
+                                        }}>
+                                        {isUser ? '👤' : '🤖'}
+                                    </div>
+                                    <div style={{ flex: 1, fontSize: '13px', color: isUser ? '#fff' : '#aaa' }}>
+                                        <span style={{ fontSize: '10px', color: '#444', marginRight: '6px' }}>
+                                            {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                        </span>
+                                        {entry.text}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
 

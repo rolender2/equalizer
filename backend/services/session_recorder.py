@@ -154,3 +154,124 @@ class SessionRecorder:
         except Exception as e:
             logger.error(f"Error updating outcome for {session_id}: {e}")
             return False
+
+    @staticmethod
+    def list_sessions() -> list[dict]:
+        """
+        List all recorded sessions with summary metadata.
+        Returns list sorted by date descending (newest first).
+        """
+        try:
+            # Resolve project root: backend/services/session_recorder.py -> .../equalizer
+            project_root = Path(__file__).resolve().parent.parent.parent
+            sessions_dir = project_root / "sessions"
+            
+            if not sessions_dir.exists():
+                return []
+                
+            sessions = []
+            for file_path in sessions_dir.glob("*.json"):
+                try:
+                    with open(file_path, 'r') as f:
+                        # Read minimal data to avoid memory bloat
+                        # For very large history, we might want to optimize this to not read full files
+                        data = json.load(f)
+                        
+                        summary = {
+                            "session_id": data.get("session_id"),
+                            "timestamp": data.get("session_start"),
+                            "negotiation_type": data.get("negotiation_type", "General"),
+                            "negotiation_score": (data.get("reflection") or {}).get("negotiation_score", 0),
+                            "outcome": (data.get("outcome") or {}).get("result"),
+                            "duration_seconds": 0 
+                        }
+                        
+                        # Calculate duration roughly
+                        start = data.get("session_start")
+                        end = data.get("session_end")
+                        if start and end:
+                            try:
+                                s_dt = datetime.fromisoformat(start)
+                                e_dt = datetime.fromisoformat(end)
+                                summary["duration_seconds"] = int((e_dt - s_dt).total_seconds())
+                            except:
+                                pass
+                                
+                        sessions.append(summary)
+                except Exception as e:
+                    logger.warning(f"Error parse session file {file_path}: {e}")
+                    continue
+            
+            # Sort by timestamp desc
+            sessions.sort(key=lambda x: x["timestamp"] or "", reverse=True)
+            return sessions
+            
+        except Exception as e:
+            logger.error(f"Error listing sessions: {e}")
+            return []
+
+    @staticmethod
+    def get_session(session_id: str) -> Optional[dict]:
+        """Retrieve full session data by ID."""
+        try:
+            # Resolve project root
+            project_root = Path(__file__).resolve().parent.parent.parent
+            session_file = project_root / "sessions" / f"{session_id}.json"
+            
+            if not session_file.exists():
+                return None
+                
+            with open(session_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error retrieving session {session_id}: {e}")
+            return None
+
+    @staticmethod
+    def swap_speaker_role(session_id: str, transcript_index: int) -> bool:
+        """
+        Swap the speaker role for a specific transcript entry.
+        Arguments:
+            session_id: The ID of the session
+            transcript_index: The index in the 'transcripts' array to swap
+        """
+        try:
+            project_root = Path(__file__).resolve().parent.parent.parent
+            session_file = project_root / "sessions" / f"{session_id}.json"
+            
+            if not session_file.exists():
+                logger.error(f"Session {session_id} not found")
+                return False
+                
+            with open(session_file, 'r') as f:
+                data = json.load(f)
+                
+            transcripts = data.get("transcripts", [])
+            if transcript_index < 0 or transcript_index >= len(transcripts):
+                logger.error(f"Index {transcript_index} out of bounds for session {session_id}")
+                return False
+                
+            # Toggle logic
+            current_speaker = str(transcripts[transcript_index].get("speaker", "unknown"))
+            # If it's currently 'user' (or 'you'), swap to 'counterparty' (or 'them') and vice versa
+            # We standardize on 'user' vs 'counterparty' for storage, but handle 'unknown'
+            
+            new_speaker = "counterparty"
+            if current_speaker.lower() in ["counterparty", "speaker 1", "1"]:
+                new_speaker = "user"
+            elif current_speaker.lower() in ["user", "speaker 0", "you", "0"]:
+                new_speaker = "counterparty"
+            else:
+                # Default unknown -> user (safest bet usually, or maybe toggle to counterparty? let's loop)
+                new_speaker = "user"
+                
+            transcripts[transcript_index]["speaker"] = new_speaker
+            data["transcripts"] = transcripts
+            
+            with open(session_file, 'w') as f:
+                json.dump(data, f, indent=2)
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error swapping speaker for {session_id}: {e}")
+            return False

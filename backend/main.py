@@ -47,6 +47,30 @@ async def get_negotiation_types():
         "default": DEFAULT_NEGOTIATION_TYPE
     })
 
+@app.get("/sessions")
+async def list_sessions():
+    """List all recorded sessions (history)."""
+    return JSONResponse(content={
+        "sessions": SessionRecorder.list_sessions()
+    })
+
+@app.get("/sessions/{session_id}")
+async def get_session(session_id: str):
+    """Get full session data."""
+    data = SessionRecorder.get_session(session_id)
+    if not data:
+        return JSONResponse(status_code=404, content={"message": "Session not found"})
+    return JSONResponse(content=data)
+
+@app.post("/sessions/{session_id}/transcript/{index}/swap")
+async def swap_speaker(session_id: str, index: int):
+    """Swap the speaker role for a specific transcript entry."""
+    success = SessionRecorder.swap_speaker_role(session_id, index)
+    if success:
+        return JSONResponse(content={"status": "success", "swapped_index": index})
+    else:
+        return JSONResponse(status_code=400, content={"message": "Failed to swap speaker. Index out of bounds or session not found."})
+
 
 from pydantic import BaseModel
 

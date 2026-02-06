@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 interface PreFlightProps {
     onStart: (config: { type: string; mode: 'live' | 'debrief'; test_mode_counterparty: boolean; emit_interim: boolean; endpointing_ms: number; window_size_seconds: number }) => void;
+    onHistory: () => void;
 }
 
 const TYPE_DESCRIPTIONS: Record<string, { label: string; desc: string }> = {
@@ -12,7 +13,7 @@ const TYPE_DESCRIPTIONS: Record<string, { label: string; desc: string }> = {
     // "Salary": - Hidden for this persona
 };
 
-export default function PreFlight({ onStart }: PreFlightProps) {
+export default function PreFlight({ onStart, onHistory }: PreFlightProps) {
     const [types, setTypes] = useState<string[]>([]);
     const [selectedType, setSelectedType] = useState<string>('Vendor'); // Default for this persona
     const [preset, setPreset] = useState<'practice' | 'live_call' | 'post_analysis'>('practice');
@@ -74,21 +75,21 @@ export default function PreFlight({ onStart }: PreFlightProps) {
         <div
             className="preflight-card"
             style={{
-            // @ts-ignore
-            backgroundColor: 'rgba(0, 0, 0, 0.95)',
-            border: '2px solid #00ff41',
-            borderRadius: '16px',
-            padding: '16px',
-            color: '#fff',
-            minWidth: '460px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-            textAlign: 'center',
-            boxShadow: '0 8px 32px rgba(0, 255, 65, 0.2)',
-            pointerEvents: 'auto'
-        }}>
+                // @ts-ignore
+                backgroundColor: 'rgba(0, 0, 0, 0.95)',
+                border: '2px solid #00ff41',
+                borderRadius: '16px',
+                padding: '16px',
+                color: '#fff',
+                minWidth: '460px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                textAlign: 'center',
+                boxShadow: '0 8px 32px rgba(0, 255, 65, 0.2)',
+                pointerEvents: 'auto'
+            }}>
             <h2 style={{
                 margin: '0 0 2px 0',
                 fontSize: '16px',
@@ -96,9 +97,29 @@ export default function PreFlight({ onStart }: PreFlightProps) {
                 // @ts-ignore
                 WebkitAppRegion: 'drag',
                 cursor: 'move',
-                userSelect: 'none'
+                userSelect: 'none',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
             }}>
-                Set the context for this conversation
+                <span>Set the context</span>
+                <button
+                    onClick={(e) => { e.stopPropagation(); onHistory(); }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    style={{
+                        // @ts-ignore
+                        WebkitAppRegion: 'no-drag',
+                        fontSize: '11px',
+                        background: 'transparent',
+                        border: '1px solid #444',
+                        color: '#888',
+                        borderRadius: '4px',
+                        padding: '2px 6px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    📜 History
+                </button>
             </h2>
             <div style={{ fontSize: '11px', color: '#888', marginBottom: '8px' }}>
                 This helps Sidekick recognize leverage and risk patterns.

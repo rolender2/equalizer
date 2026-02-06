@@ -71,6 +71,7 @@ export default function OutcomeModal({ onSave, onClose }: OutcomeModalProps) {
                     margin: 0,
                     fontSize: '20px',
                     textAlign: 'center',
+                    // @ts-ignore
                     WebkitAppRegion: 'drag',
                     cursor: 'move',
                     padding: '10px'
