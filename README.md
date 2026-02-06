@@ -89,21 +89,21 @@ cd frontend && npm run electron:dev
 
 ## 🎮 Usage Guide
 
-### Product Modes (Presets)
-The system uses three presets in the **Pre-Flight** screen:
+### Concept Definitions
 
-1. **Practice Mode**
-   - Live analysis + Test Mode + Continuous updates.
-   - Ideal for self-training and demos.
-   - **Note:** Ignores speaker gating (analyzes *all* audio).
-2. **Live Call**
-   - Live analysis with strict gating.
-   - Only analyzes audio detected as **Counterparty** (Speaker 1+).
-   - **Requirement:** User (Speaker 0) MUST speak first to establish identity.
-3. **Post Negotiation Analysis Only**
-   - No live popups.
-   - Records session silently.
-   - Generates a comprehensive "Report Card" at the end.
+#### Conversation Context
+- **General Business Conversation**: Professional discussions involving leverage or persuasion.
+- **Vendor Pricing**: Pricing discussions, concessions, terms, or service-level pushback.
+- **Scope & Deliverables**: Preventing scope creep, timeline pressure, or unpaid expansion.
+- **Renewal / Upsell**: Contract renewals, price increases, or expansion pressure.
+
+#### Mode Preset
+- **Practice Mode**: Solo/YouTube demo. Fast, permissive detection.
+  - *Use for:* Self-training, testing against a video recording.
+- **Live Call**: Two-party call. Real-time alerts with cleaner gating.
+  - *Use for:* Real Zoom/Teams/Phone negotiations.
+- **Post Negotiation Analysis Only**: No live prompts. Post-call summary only.
+  - *Use for:* Recording a session silently to review later without distraction.
 
 ### Standard Flow
 1. **Select Scenario:** Vendor, Scope, Renewal, General.

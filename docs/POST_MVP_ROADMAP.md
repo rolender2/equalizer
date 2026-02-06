@@ -144,3 +144,10 @@ Refine and tighten the MVP to increase user trust, relevance, and learning value
 - **Implementation:**
   - JSON configuration for "Trigger Phrases" (e.g. "We don't have budget").
   - User-defined response signals.
+
+### Phase 9: Multi-Party Role Assignment ("Friend or Foe")
+**Goal:** Handle complex negotiations with multiple speakers on each side (e.g., Legal Counsel, Technical Experts).
+- **Implementation:**
+  - **Diarization Map:** UI to visualize detected speakers (Speaker 0, 1, 2, 3...).
+  - **Role Toggle:** User can label each speaker ID as "Ally" (Ignore) or "Opponent" (Analyze).
+  - **Impact:** Prevents own team members from triggering "Authority" or "Risk" alerts.
