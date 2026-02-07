@@ -30,7 +30,30 @@
 - **Role Mapping**: Strict `User` (Speaker 0) vs `Counterparty` (Speaker 1+) enforcement, with optional Test Mode override for demos
 - **AI**: Deepgram Nova-2 (Streaming STT) + OpenAI GPT-4o-mini (Coach)
 
+### 📱 App Store Mode (Mic Only)
+
+For Mac App Store compliance, Sidekick supports a **Mic Only** mode that bypasses system audio capture:
+
+| Mode | Audio Source | Use Case |
+|------|-------------|----------|
+| **Standard** | Mic + System Audio | Direct downloads, best quality |
+| **App Store** | Mic Only | Mac App Store builds, uses speaker diarization |
+
+**How Mic Only Works:**
+- User speaks into mic → Identified as `Speaker 0` (USER)
+- Counterparty voice comes through speakers → Picked up by mic as `Speaker 1` (COUNTERPARTY)
+- Deepgram's AI diarization separates the voices automatically
+
+**To enable App Store Mode:**
+```bash
+# In frontend/.env
+VITE_APP_STORE_MODE=true
+```
+
+> ⚠️ **Note:** In App Store Mode, users must use speakers (not headphones) so the counterparty's voice can be captured by the microphone.
+
 ---
+
 
 ## 🚀 Getting Started
 

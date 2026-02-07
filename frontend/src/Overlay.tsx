@@ -10,6 +10,10 @@ const ipcRenderer = (window as any).require?.('electron')?.ipcRenderer;
 const ADVICE_DURATION_MS = 8000;
 const SAMPLE_RATE = 16000;
 
+// App Store Mode: When true, forces Mic Only mode (no system audio capture)
+// This is required for Mac App Store compliance
+const APP_STORE_MODE = import.meta.env.VITE_APP_STORE_MODE === 'true';
+
 // Available coach personalities
 const PERSONALITIES = [
     { id: 'tactical', name: 'Tactical', icon: '⚔️' },
@@ -61,7 +65,9 @@ export default function Overlay() {
     const [micLevel, setMicLevel] = useState(0);
     const [systemLevel, setSystemLevel] = useState(0);
     const [skipSystemAudio, setSkipSystemAudio] = useState(() => {
-        // Load preference from localStorage
+        // App Store Mode forces Mic Only (skip system audio)
+        if (APP_STORE_MODE) return true;
+        // Otherwise, load preference from localStorage
         return localStorage.getItem('skipSystemAudio') === 'true';
     });
 

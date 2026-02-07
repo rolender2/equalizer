@@ -125,6 +125,19 @@ Refine and tighten the MVP to increase user trust, relevance, and learning value
 
 ---
 
+## Phase 5.6: App Store Compliance (Completed)
+**Goal:** Ensure Sidekick can be distributed via the Mac App Store.
+
+### 1. Mic-Only Mode
+- **Problem:** App Store sandboxing restricts system audio capture (DisplayStream).
+- **Solution:** Hybrid build system with `VITE_APP_STORE_MODE` flag.
+- **Tech:**
+  - **Standard Mode:** Mic + System Audio (Direct Download).
+  - **App Store Mode:** Mic Only + Diarization (Store Build). Uses Deepgram to separate User vs Counterparty from a single mic stream.
+
+---
+
+
 ## Future Roadmap (Post-Refactor)
 
 ### Phase 6: Local Inference Engine (Privacy ++)
